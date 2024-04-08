@@ -10,13 +10,11 @@ defmodule Bonfire.Poll.LiveHandler do
 
   def negative_score_info do
     l("""
-    You may optionally increase the impact of negative scores using the negative score weighting. This is a simple mutiplier: x1 has no impact on negative scores, x2 doubles their impact, x3 triples them.
+    When someone asks a question on Bonfire, they can choose how much weight negative scores carry. Think of it like a volume knob for disagreement. 
 
-    Example: a vote of -3 where there is a negative score weighting of x3 is counted as -9.
+    > For example, if one person disagrees with a proposal and gives it -3, while another person agrees with a score of 3, increasing the negative score weighting to x3 would give us -6 instead of a meaningless 0.
 
-    By increasing the impact of negative scores, the group moves towards proposals which are more _acceptable_ (less 'negative") than proposals which are more _preferred_ (more net 'positive.")
-
-    The 'right' weighting multiplier for your group will probably best be found through experimentation!
+    Why does this matter? It's about aiming for consent, instead of settling for everyone kinda-sorta agreeing. By giving more power to negative scores, we're saying "let's prioritize proposals that everyone can live with." Finding the sweet spot for each community or different types of decision might take a bit of experimentation, but that's part of the fun! 
     """)
   end
 
@@ -227,8 +225,18 @@ defmodule Bonfire.Poll.LiveHandler do
 
   def handle_event("submit_vote", %{"question_id" => question, "vote" => votes}, socket) do
     # Logic to handle vote submission - TODO: optimise
-    Enum.map(votes, &Bonfire.Poll.Votes.vote(current_user(socket), question, &1))
-
-    {:noreply, socket}
+    with {_ok, []} <-
+           Enum.map(votes, &Bonfire.Poll.Votes.vote(current_user(socket), question, &1))
+           |> Enum.split_with(fn
+             {:ok, _} -> true
+             _ -> false
+           end) do
+      {:noreply,
+       socket
+       |> assign_flash(:info, l("Thanks for participating!"))}
+    else
+      {_ok, errors} ->
+        errors
+    end
   end
 end

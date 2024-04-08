@@ -3,7 +3,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   alias Bonfire.Common.Text
 
   prop object, :any
-  # prop profile, :any, default: nil
+  prop activity_component_id, :any, default: nil
   prop activity, :any, default: nil
   prop viewing_main_object, :boolean, default: false
   prop showing_within, :atom, default: nil
@@ -18,7 +18,8 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   def preloads(),
     do: [
       :post_content,
-      choices: [:post_content]
+      # :voted,
+      choices: [:post_content, object_voted: [:vote]]
     ]
 
   def post_content(object) do

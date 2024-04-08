@@ -89,7 +89,11 @@
     <div class="collapse collapse-arrow bg-base-200">
       <input type="checkbox">
       <div class="collapse-title text-l font-medium">
-        {l("Negative Score Weighting")}: {e(@object, :weighting, nil)}
+        {l("Negative Score Weighting")}: {case e(@object, :weighting, nil) do
+          1 -> l("None")
+          nil -> "?"
+          int -> "x#{int}"
+        end}
       </div>
       <div class="collapse-content prose">
         {rich(Bonfire.Poll.LiveHandler.negative_score_info())}
@@ -102,6 +106,7 @@
 
       {#for choice <- e(@object, :choices, [])}
         <Bonfire.Poll.Web.Preview.ChoiceLive
+          question={Map.drop(@object, [:choices])}
           object={choice}
           viewing_main_object={@viewing_main_object}
           showing_within={@showing_within}
@@ -112,9 +117,10 @@
     {#elseif e(@object, :voting_dates, nil) != false}
       <!-- <Bonfire.Poll.QuestionTimeLabelLive phase="voting" dates={e(@object, :voting_dates, [])} /> -->
 
-      <form phx-submit="Bonfire.Poll:submit_vote">
+      <form phx-submit="Bonfire.Poll:submit_vote" phx-target={@activity_component_id}>
         {#for choice <- e(@object, :choices, [])}
           <Bonfire.Poll.Web.Preview.ChoiceLive
+            question={Map.drop(@object, [:choices])}
             object={choice}
             viewing_main_object={@viewing_main_object}
             showing_within={@showing_within}

@@ -11,7 +11,7 @@ defmodule Bonfire.Poll.Vote do
   use Arrows
 
   pointable_schema do
-    field :vote_weight, :integer
+    field :vote_weight, :integer, default: nil
     has_one(:edge, Edge, foreign_key: :id)
   end
 
@@ -20,9 +20,9 @@ defmodule Bonfire.Poll.Vote do
   def changeset(vote \\ %Vote{}, params)
 
   def changeset(vote, params),
-    do:
-      cast(vote, params, @cast)
-      |> validate_required(@cast)
+    do: cast(vote, params, @cast, empty_values: ["", "∞", nil, false])
+
+  # |> validate_required(@cast)
 end
 
 defmodule Bonfire.Poll.Vote.Migration do
@@ -38,7 +38,7 @@ defmodule Bonfire.Poll.Vote.Migration do
       require Needle.Migration
 
       Needle.Migration.create_pointable_table Bonfire.Poll.Vote do
-        add :vote_weight, :integer
+        add :vote_weight, :integer, null: true
         unquote_splicing(exprs)
       end
     end

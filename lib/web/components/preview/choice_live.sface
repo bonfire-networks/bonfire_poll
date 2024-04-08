@@ -78,5 +78,21 @@
     {/case}
   </div>
 
-  <Bonfire.Poll.VotingLive :if={@vote} choice={@object} />
+  {#if @vote}
+    <Bonfire.Poll.VotingLive choice={@object} />
+  {#else}
+  {/if}
+
+  {#case e(@object, :object_voted, nil)}
+    {#match nil}
+    {#match votes}
+      <Bonfire.Poll.VotingLive
+        choice={@object}
+        selected={Bonfire.Poll.Votes.calculate_total(votes, @question)
+        |> debug("calculate_total")
+        |> Bonfire.Poll.Votes.get_average_base_score(length(votes))
+        |> debug("average_base_score") || "∞"}
+        readonly
+      />
+  {/case}
 </div>
