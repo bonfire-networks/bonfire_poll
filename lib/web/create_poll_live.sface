@@ -1,0 +1,120 @@
+<div class="flex flex-col h-full write_post_content">
+  <Form
+    for={%{}}
+    as={:question}
+    submit="Bonfire.Poll:create_poll"
+    action="Bonfire.Poll:create_poll"
+    opts={
+      autocomplete: "off",
+      "phx-target": "#smart_input"
+    }
+    class={if WriteEditorLive.use_rich_editor?(e(@smart_input_opts, :wysiwyg, true), @__context__),
+      do: "with_editor flex-1",
+      else: "with_textarea flex-1"}
+  >
+    <div class={
+      "bg-base-100 flex h-full flex-1": @thread_mode != :flat,
+      "bg-base-100 border-t border-base-content/10 p-3 h-full flex-1 sticky bottom-0 messages_smart_input":
+        @thread_mode == :flat,
+      "!border-0": @showing_within == :compose,
+      "!relative border-none !h-auto !relative": @showing_within == :page
+    }>
+      <div class={
+        "relative flex flex-col flex-1 h-full",
+        "h-auto": @showing_within == :compose
+      }>
+        <Bonfire.UI.Common.InputControlsLive
+          smart_input_opts={@smart_input_opts}
+          thread_mode={@thread_mode}
+          reply_to_id={ulid(@reply_to_id)}
+          context_id={@context_id}
+          create_object_type={@create_object_type}
+          to_boundaries={@to_boundaries}
+          to_circles={@to_circles}
+          exclude_circles={@exclude_circles}
+          showing_within={@showing_within}
+          uploads={false}
+          uploaded_files={@uploaded_files}
+          submit_label={l("Create")}
+        >
+          <Inputs for={:post_content}>
+            <!-- <div x-show="!open_boundaries" class="flex-1"> -->
+            <div class="flex-1">
+              <!-- <div display="style: none" x-show="title_open" x-transition> -->
+              <div>
+                <label for="title" class="sr-only">{l("Title")}</label>
+                <Field name={:name}>
+                  <TextInput
+                    opts={
+                      placeholder: l("Enter a title")
+                    }
+                    class={
+                      "block w-full border-0 p-2 text-lg font-medium placeholder-base-content/70 bg-base-100 text-base-content border-b border-base-content/10",
+                      "!border !border-base-content/30 rounded-lg mb-2": e(@thread_mode, nil) == :flat
+                    }
+                  />
+                </Field>
+              </div>
+              <label for="description" class="sr-only">{l("Description")}</label>
+              <Field name={:html_body}>
+                <div class={@textarea_container_class} :class={@textarea_container_class_alpine}>
+                  <WriteEditorLive
+                    field_name="question[post_content][html_body]"
+                    textarea_class={@textarea_class}
+                    smart_input_opts={@smart_input_opts
+                    |> Map.put(
+                      :prompt,
+                      l(
+                        "Enter a plain text summary for the page (useful for showing in page lists, and for search engines)..."
+                      )
+                    )}
+                    insert_text={@insert_text}
+                    thread_mode={@thread_mode}
+                    showing_within={@showing_within}
+                    advanced_mode
+                  />
+                </div>
+              </Field>
+
+              <div id="scrollTopicQuestion" />
+              <div class="pb-6">
+                {!-- <p class="text-l">{ l("Title of question") }</p>
+            { text_input @form, :name, class: "input input-bordered w-full" }
+            <br/>
+            <p class="text-l">{ l("Description") }</p>
+            { textarea @form, :description, id: "description" }
+            <br> --}
+                <WeightSelector />
+                <h2 class="text-l">{l("Select mode")}</h2>
+                <PhaseSelector />
+              </div>
+              <div class="py-2 hidden">
+                # TODO
+                <div class="flex justify-between items-center flex-wrap">
+                  <div class="fullOnly">
+                    <h1>{l("question.timeLeftHeading")}</h1>
+                  </div>
+                  <div class="voteOnly">
+                    <h1>{l("question.timeLeftVotingHeading")}</h1>
+                  </div>
+                </div>
+                <div class="fullOnly">
+                  #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "proposal")
+                  <p />
+                </div>
+                #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "voting")
+              </div>
+              <div class="voteOnly mt-4">
+                <h2 class="text-l">{l("Proposals")}</h2>
+                {#for {proposal, index} <- Enum.with_index(@proposals)}
+                  <Bonfire.Poll.EditProposalLive proposal={proposal} index={index} />
+                {/for}
+                <Bonfire.Poll.AddProposal event_target={@myself} />
+              </div>
+            </div>
+          </Inputs>
+        </Bonfire.UI.Common.InputControlsLive>
+      </div>
+    </div>
+  </Form>
+</div>

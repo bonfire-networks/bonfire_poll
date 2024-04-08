@@ -1,0 +1,6 @@
+<Bonfire.UI.Common.SmartInputButtonLive
+  class="gap-2 mt-3 normal-case rounded-full btn-outline !border !border-primary/30 btn btn-sm btn-primary"
+  create_object_type={:poll}
+  icon="material-symbols:how-to-vote"
+  prompt={l("Create a poll")}
+/>
