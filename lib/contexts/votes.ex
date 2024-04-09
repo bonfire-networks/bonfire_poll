@@ -5,6 +5,7 @@ defmodule Bonfire.Poll.Votes do
   alias Ecto.Changeset
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Objects
+  alias Bonfire.Social.Feeds
 
   def scores,
     do: [
@@ -54,7 +55,7 @@ defmodule Bonfire.Poll.Votes do
 
   #   def vote(%{} = voter, %{} = question, choices, opts) do
   #     if Bonfire.Boundaries.can?(voter, :vote, question) do
-  #       do_vote(voter, question, choices, opts)
+  #       vote(voter, question, choices, opts)
   #     else
   #       error(l("Sorry, you cannot vote on this"))
   #     end
@@ -73,54 +74,69 @@ defmodule Bonfire.Poll.Votes do
                ]
            ) do
       # debug(choice)
-      do_vote(voter, question, choices, opts)
+      vote(voter, question, choices, opts)
     else
       _ ->
-        error(l("Sorry, you cannot vote on this"))
+        error(question, l("Sorry, you cannot vote on this"))
     end
   end
 
-  #   def vote(%{} = voter, question, choice, opts) when is_binary(choice) do
-  #     with {:ok, choice} <-
-  #            Bonfire.Common.Needles.get(
-  #              choice,
-  #              opts ++
-  #                [
-  #                  current_user: voter,
-  #                 #  verbs: [:vote]
-  #                 skip_boundary_check: true # since we already check on the question
-  #                ]
-  #            ) do
-  #       # debug(choice)
-  #       do_vote(voter, question, choice, opts)
-  #     else
-  #       _ ->
-  #         error(l("Sorry, that choice was not found"))
-  #     end
-  #   end
+  def vote(voter, question, choices, opts) do
+    # multiple choice
+    with {:ok, votes} <-
+           choices
+           |> load_choices(voter, opts)
+           |> debug("loaded_choices")
+           |> Enum.map(&register_vote_choice(voter, question, &1, opts))
+           |> only_ok()
+           |> debug("oks"),
+         #  |> Enum.split_with(fn # TODO: more generic
+         #    {:ok, _} -> true
+         #    _ -> false
+         #  end),
+         {:ok, vote_activity} <- send_vote_activity(voter, question, votes, opts) do
+      {:ok, vote_activity}
+    end
+  end
 
-  def do_vote(voter, question, choice, opts \\ [])
+  defp load_choices({choice, weight}, voter, opts) do
+    load_choices([{choice, weight}], voter, opts)
+  end
 
-  def do_vote(%{} = voter, %{} = question, {choice, weight}, opts) do
-    question = Objects.preload_creator(question)
-    question_object_creator = Objects.object_creator(question)
+  defp load_choices(choice, voter, opts) when is_struct(choice) do
+    load_choices([{choice, 1}], voter, opts)
+  end
 
-    choice = Objects.preload_creator(choice)
-    choice_object_creator = Objects.object_creator(choice)
+  defp load_choices(choices_weights, voter, opts)
+       when is_list(choices_weights) or is_map(choices_weights) do
+    choices_weights = Enum.into(choices_weights, %{})
+    # assumes choices contains choice IDs as key and weight as values
+    choices_weights
+    #  TODO: if choices are already loaded, use those (and maybe re-check boundaries) instead of reloading them
+    |> Map.keys()
+    |> Bonfire.Boundaries.load_pointers!(
+      opts ++
+        [
+          current_user: voter,
+          #  verbs: [:vote]
+          # FIXME: temp until we run fixtures with vote verb
+          skip_boundary_check: true
+          #  verbs: [:read]
+        ]
+    )
+    |> Objects.preload_creator()
+    |> debug()
+    |> Enum.map(fn %{id: id} = choice ->
+      {choice, choices_weights[id]}
+    end)
+  end
 
-    opts =
-      [
-        # TODO: make configurable
-        boundary: "mentions",
-        to_circles: [id(question_object_creator), id(choice_object_creator)]
-        # to_feeds: Feeds.maybe_creator_notification(voter, [question_object_creator, choice_object_creator], opts)
-      ] ++ List.wrap(opts)
+  def register_vote_choice(voter, question, choice, opts \\ [])
 
-    case create(voter, choice, weight, opts) do
+  def register_vote_choice(%{} = voter, %{} = question, {choice, weight}, opts) do
+    case do_create_vote_choice(voter, choice, weight, opts) do
       {:ok, vote} ->
         {:ok, vote}
-
-      # Integration.maybe_federate_and_gift_wrap_activity(voter, vote)
 
       {:error, e} ->
         case get(voter, choice) do
@@ -134,8 +150,64 @@ defmodule Bonfire.Poll.Votes do
     end
   end
 
-  def do_vote(%{} = voter, %{} = question, choice, opts) do
-    do_vote(voter, question, {choice, 1}, opts)
+  defp do_create_vote_choice(voter, choice, weight, opts) do
+    # don't create an activity or set ACLs on each individual vote on a choice, since we do that in `send_vote_activity/4` instead
+    Edges.changeset_base_with_creator(Vote, voter, choice, opts)
+    |> Vote.changeset(%{vote_weight: weight})
+    |> debug("csss")
+    |> Edges.insert(voter, choice)
+  end
+
+  def send_vote_activity(%{} = voter, %{} = question, registered_votes, opts) do
+    question = Objects.preload_creator(question)
+    question_object_creator = Objects.object_creator(question)
+
+    choice_creators =
+      registered_votes
+      |> List.wrap()
+      |> Enum.map(&Objects.object_creator(e(&1, :edge, :object, nil)))
+
+    opts =
+      [
+        # TODO: make configurable
+        boundary: "mentions",
+        to_circles: [Enums.id(question_object_creator), Enums.ids(choice_creators)],
+        to_feeds:
+          Feeds.maybe_creator_notification(
+            voter,
+            [question_object_creator, choice_creators],
+            opts
+          )
+      ] ++ List.wrap(opts)
+
+    case do_create_vote_activity(voter, question, opts) do
+      {:ok, vote_activity} ->
+        vote_activity =
+          vote_activity
+          |> Map.put(:votes, registered_votes)
+
+        {:ok, vote_activity}
+
+      # Integration.maybe_federate_and_gift_wrap_activity(voter, vote_activity)
+
+      {:error, e} ->
+        case get(voter, question) do
+          {:ok, vote_activity} ->
+            {:ok,
+             vote_activity
+             |> debug("the user already voted on this")
+             |> Map.put(:votes, registered_votes)}
+
+          _ ->
+            error(e)
+        end
+    end
+  end
+
+  defp do_create_vote_activity(voter, question, opts) do
+    Edges.changeset(Vote, voter, :vote, question, opts)
+    |> debug("csss")
+    |> Edges.insert(voter, question)
   end
 
   defp query_base(filters, opts) do
@@ -144,14 +216,6 @@ defmodule Bonfire.Poll.Votes do
 
   def query(filters, opts) do
     query_base(filters, opts)
-  end
-
-  defp create(voter, choice, weight, opts) do
-    # so votes don't get deleted if a voter is deleted
-    Edges.changeset_without_caretaker(Vote, voter, :vote, choice, opts)
-    |> Vote.changeset(%{vote_weight: weight})
-    |> debug("csss")
-    |> Edges.insert()
   end
 
   #   def get_total(proposal, votes, %{} = question) do
@@ -173,6 +237,9 @@ defmodule Bonfire.Poll.Votes do
       calculate_total(vote, weighting, sum)
     end)
   end
+
+  def calculate_total(nil, _weighting, nil), do: nil
+  def calculate_total(_vote_weight, _weighting, nil), do: nil
 
   def calculate_total(%{vote_weight: vote_weight} = _vote, weighting, sum),
     do: calculate_total(vote_weight, weighting, sum)

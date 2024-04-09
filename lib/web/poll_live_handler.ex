@@ -225,18 +225,11 @@ defmodule Bonfire.Poll.LiveHandler do
 
   def handle_event("submit_vote", %{"question_id" => question, "vote" => votes}, socket) do
     # Logic to handle vote submission - TODO: optimise
-    with {_ok, []} <-
-           Enum.map(votes, &Bonfire.Poll.Votes.vote(current_user(socket), question, &1))
-           |> Enum.split_with(fn
-             {:ok, _} -> true
-             _ -> false
-           end) do
+
+    with {:ok, _result} <- Bonfire.Poll.Votes.vote(current_user(socket), question, votes) do
       {:noreply,
        socket
        |> assign_flash(:info, l("Thanks for participating!"))}
-    else
-      {_ok, errors} ->
-        errors
     end
   end
 end
