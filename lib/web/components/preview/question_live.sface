@@ -85,40 +85,26 @@
     {/case}
   </div>
 
-{#if not is_nil(e(@object, :choices, nil))}
-  <div class="flex justify-end items-center">
-    <div class="collapse collapse-arrow bg-base-200">
-      <input type="checkbox">
-      <div class="collapse-title text-l font-medium">
-        {l("Negative Score Weighting")}: {case e(@object, :weighting, nil) do
-          1 -> l("None")
-          nil -> "?"
-          int -> "x#{int}"
-        end}
-      </div>
-      <div class="collapse-content prose">
-        {rich(Bonfire.Poll.LiveHandler.negative_score_info())}
+  {#if not is_nil(e(@object, :choices, nil))}
+    <div class="flex justify-end items-center">
+      <div class="collapse collapse-arrow bg-base-200">
+        <input type="checkbox">
+        <div class="collapse-title text-l font-medium">
+          {l("Negative Score Weighting")}: {case e(@object, :weighting, nil) do
+            1 -> l("None")
+            nil -> "?"
+            int -> "x#{int}"
+          end}
+        </div>
+        <div class="collapse-content prose">
+          {rich(Bonfire.Poll.LiveHandler.negative_score_info())}
+        </div>
       </div>
     </div>
-  </div>
-  <div>
-    {#if e(@object, :proposal_dates, []) != []}
-      <!-- <Bonfire.Poll.QuestionTimeLabelLive phase={"proposal"} dates={e(@object, :proposal_dates, [])} /> -->
+    <div>
+      {#if e(@object, :proposal_dates, []) != []}
+        <!-- <Bonfire.Poll.QuestionTimeLabelLive phase={"proposal"} dates={e(@object, :proposal_dates, [])} /> -->
 
-      {#for choice <- e(@object, :choices, [])}
-        <Bonfire.Poll.Web.Preview.ChoiceLive
-          question={Map.drop(@object, [:choices])}
-          object={choice}
-          viewing_main_object={@viewing_main_object}
-          showing_within={@showing_within}
-          is_remote={@is_remote}
-          hide_actions={@hide_actions}
-        />
-      {/for}
-    {#elseif e(@object, :voting_dates, nil) != false}
-      <!-- <Bonfire.Poll.QuestionTimeLabelLive phase="voting" dates={e(@object, :voting_dates, [])} /> -->
-
-      <form phx-submit="Bonfire.Poll:submit_vote" phx-target={@activity_component_id}>
         {#for choice <- e(@object, :choices, [])}
           <Bonfire.Poll.Web.Preview.ChoiceLive
             question={Map.drop(@object, [:choices])}
@@ -127,18 +113,32 @@
             showing_within={@showing_within}
             is_remote={@is_remote}
             hide_actions={@hide_actions}
-            vote
           />
         {/for}
-        <div class="text-center flex items-center">
-          <input type="hidden" name="question_id" value={id(@object)}>
-          <button id="submit-vote" class="flex btn btn-primary p-2">
-            <#Icon iconify="material-symbols:how-to-vote" class="w-5 h-5" />
-            <span>{l("Submit Vote")}</span>
-          </button>
-        </div>
-      </form>
-    {/if}
-  </div>
+      {#elseif e(@object, :voting_dates, nil) != false}
+        <!-- <Bonfire.Poll.QuestionTimeLabelLive phase="voting" dates={e(@object, :voting_dates, [])} /> -->
+
+        <form phx-submit="Bonfire.Poll:submit_vote" phx-target={@activity_component_id}>
+          {#for choice <- e(@object, :choices, [])}
+            <Bonfire.Poll.Web.Preview.ChoiceLive
+              question={Map.drop(@object, [:choices])}
+              object={choice}
+              viewing_main_object={@viewing_main_object}
+              showing_within={@showing_within}
+              is_remote={@is_remote}
+              hide_actions={@hide_actions}
+              vote
+            />
+          {/for}
+          <div class="text-center flex items-center">
+            <input type="hidden" name="question_id" value={id(@object)}>
+            <button id="submit-vote" class="flex btn btn-primary p-2">
+              <#Icon iconify="material-symbols:how-to-vote" class="w-5 h-5" />
+              <span>{l("Submit Vote")}</span>
+            </button>
+          </div>
+        </form>
+      {/if}
+    </div>
   {/if}
 </div>
