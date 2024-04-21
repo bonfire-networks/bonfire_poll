@@ -2,11 +2,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
      Code.ensure_loaded?(Absinthe.Schema.Notation) do
   defmodule Bonfire.Poll.API.GraphQL do
     use Absinthe.Schema.Notation
-    alias Absinthe.Resolution.Helpers
+    use Absinthe.Relay.Schema.Notation, :modern
 
     import Bonfire.Poll.Integration
     import Untangle
+
+    alias Absinthe.Resolution.Helpers
     alias Bonfire.API.GraphQL
+    alias Bonfire.API.GraphQL.Pagination
     alias Bonfire.Common.Utils
     alias Bonfire.Common.Types
     alias Bonfire.Poll.Questions
@@ -25,24 +28,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:activity, :activity)
     end
 
-    # object :post_content do
-    #   field(:title, :string)
-    #   field(:summary, :string)
-    #   field(:html_body, :string)
-    # end
-
-    # input_object :post_content_input do
-    #   field(:title, :string)
-    #   field(:summary, :string)
-    #   field(:html_body, :string)
-    # end
-
-    # TODO
-    object :polls_page do
-      field(:page_info, non_null(:page_info))
-      field(:edges, non_null(list_of(non_null(:poll))))
-      field(:total_count, non_null(:integer))
-    end
+    connection(node_type: :poll)
 
     input_object :poll_filters do
       field(:id, :id)
@@ -50,7 +36,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     object :poll_queries do
       @desc "Get all polls"
-      field :polls, list_of(:poll) do
+      # field :polls, list_of(:poll) do
+      #   resolve(&list_polls/3)
+      # end
+      connection field :polls, node_type: :poll do
         resolve(&list_polls/3)
       end
 
@@ -82,14 +71,25 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       # end
     end
 
+    # def list_polls(_parent, args, info) do
+    #   {:ok,
+    #    Questions.list_paginated(Map.to_list(args), GraphQL.current_user(info)) |> prepare_list()}
+    # end
     def list_polls(_parent, args, info) do
-      {:ok,
-       Questions.list_paginated(Map.to_list(args), GraphQL.current_user(info)) |> prepare_list()}
+      {pagination_args, filters} =
+        Pagination.pagination_args_filter(args)
+        |> debug()
+
+      Questions.list_paginated(filters,
+        current_user: GraphQL.current_user(info),
+        pagination: pagination_args
+      )
+      |> Pagination.connection_paginate(pagination_args)
     end
 
-    defp prepare_list(%{edges: items_page}) when is_list(items_page) do
-      items_page
-    end
+    # defp prepare_list(%{edges: items_page}) when is_list(items_page) do
+    #   items_page
+    # end
 
     def get_poll(_parent, %{filter: %{id: id}} = _args, info) do
       Questions.read(id, GraphQL.current_user(info))
