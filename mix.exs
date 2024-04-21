@@ -26,7 +26,8 @@ defmodule Bonfire.Poll.MixProject do
       deps:
         Mess.deps([
           {:phoenix_live_reload, "~> 1.2", only: :dev},
-          {:absinthe, "~> 1.7.0", optional: true},
+          {:bonfire_api_graphql, git: "https://github.com/bonfire-networks/bonfire_api_graphql",
+           optional: true, runtime: false},
           {:floki, ">= 0.0.0", only: [:dev, :test]}
         ])
     ]
