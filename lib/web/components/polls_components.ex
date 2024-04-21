@@ -85,7 +85,7 @@ defmodule Bonfire.Poll.EditProposalLive do
           <b>{l("Proposed choice")}</b>
           <input
             id={"name-#{@index}"}
-            name={"choice[#{@index}][name]"}
+            name={"choices[#{@index}][name]"}
             type="text"
             class="input input-bordered input-sm my-2 w-full"
             value={e(@proposal, :name, nil)}
@@ -93,7 +93,7 @@ defmodule Bonfire.Poll.EditProposalLive do
           <label>{l("Description and rationale")}</label>
           <textarea
             id={"description-#{@index}"}
-            name={"choice[#{@index}][description]"}
+            name={"choices[#{@index}][description]"}
             data-index={@index}
           >{e(@proposal, :description, nil)}</textarea>
         </div>

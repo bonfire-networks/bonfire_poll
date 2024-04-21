@@ -26,7 +26,7 @@ defmodule Bonfire.Poll.MixProject do
       deps:
         Mess.deps([
           {:phoenix_live_reload, "~> 1.2", only: :dev},
-
+          {:absinthe, "~> 1.7.0", optional: true},
           {:floki, ">= 0.0.0", only: [:dev, :test]}
         ])
     ]

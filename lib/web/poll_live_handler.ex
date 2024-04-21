@@ -128,7 +128,7 @@ defmodule Bonfire.Poll.LiveHandler do
   def handle_event("add_choices", params, socket) do
     attrs =
       params
-      |> Map.merge(e(params, "choice", %{}))
+      |> Map.merge(e(params, "choices", %{}))
       |> debug("section params")
       |> input_to_atoms()
 

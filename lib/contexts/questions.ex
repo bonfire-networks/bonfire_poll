@@ -1,15 +1,24 @@
 defmodule Bonfire.Poll.Questions do
   use Bonfire.Common.Utils
-  import Bonfire.Poll.Integration
+  use Bonfire.Common.Repo
+  # import Bonfire.Poll.Integration
+  import Bonfire.Boundaries.Queries
+
   alias Bonfire.Poll.Question
   alias Bonfire.Poll.Choices
   alias Bonfire.Epics.Epic
+  alias Bonfire.Social.Objects
 
   def create(options \\ []) do
     # TODO: sanitise HTML to a certain extent depending on is_admin and/or boundaries
     with {:ok, question} <- run_epic(:create, options ++ [do_not_strip_html: true]) do
-      Choices.simple_create_and_put(options[:question_attrs][:choice], question, options)
-      {:ok, question}
+      Choices.simple_create_and_put(options[:question_attrs][:choices] || [], question, options)
+      |> debug("choices added")
+
+      {:ok,
+       question
+       # TODO: use data we already have
+       |> repo().maybe_preload(choices: [:post_content])}
     end
   end
 
@@ -43,5 +52,58 @@ defmodule Bonfire.Poll.Questions do
       |> Epic.run()
 
     if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
+  end
+
+  def read(post_id, opts_or_socket_or_current_user \\ [])
+      when is_binary(post_id) do
+    query([id: post_id], opts_or_socket_or_current_user)
+    |> Objects.read(opts_or_socket_or_current_user)
+  end
+
+  @doc "List posts created by the user and which are in their outbox, which are not replies"
+  def list_by(by_user, opts \\ []) do
+    # query FeedPublish
+    # [posts_by: {by_user, &filter/3}]
+    Objects.filter(:by, by_user, query_base())
+    |> list_paginated(to_options(opts) ++ [subject_user: by_user])
+  end
+
+  @doc "List posts with pagination"
+  def list_paginated(filters, opts \\ [])
+
+  def list_paginated(filters, opts)
+      when is_list(filters) or is_struct(filters) do
+    filters
+    # |> debug("filters")
+    |> query_paginated(opts)
+    |> Objects.list_paginated(opts)
+    |> debug()
+  end
+
+  @doc "Query posts with pagination"
+  def query_paginated(filters, opts \\ [])
+
+  def query_paginated([], opts), do: query_paginated(query_base(), opts)
+
+  def query_paginated(filters, opts)
+      when is_list(filters) or is_struct(filters) do
+    Objects.list_query(filters, opts)
+    # |> proload([:post_content])  
+  end
+
+  # query_paginated(filters \\ [], current_user_or_socket_or_opts \\ [],  query \\ FeedPublish)
+  def query_paginated({a, b}, opts), do: query_paginated([{a, b}], opts)
+
+  def query(filters \\ [], opts \\ nil)
+
+  def query(filters, opts) when is_list(filters) or is_tuple(filters) do
+    query_base()
+    |> query_filter(filters, nil, nil)
+    |> boundarise(main_object.id, opts)
+  end
+
+  defp query_base do
+    from(main_object in Question, as: :main_object)
+    |> proload([:post_content, choices: {"choice_", [:post_content]}])
   end
 end
