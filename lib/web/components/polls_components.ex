@@ -277,13 +277,13 @@ defmodule Bonfire.Poll.VotingLive do
         end}));"}
       >
         <div class="flex justify-between">
-          {#for {i, name, description} <- @scores || Bonfire.Poll.Votes.scores()}
+          {#for {i, name, icon, description} <- @scores || Bonfire.Poll.Votes.scores()}
             <div class={"flex", "text-success": is_number(i) and i > 0, "text-warning": i < 0, "text-error": i == "∞"}>
-              <div class="tooltip" data-tip={description}>
+              <div class="tooltip" data-tip={"#{description} (#{i})"}>
                 {#if @readonly}
                   <div class="flex flex-row">
-                    <Iconify.iconify class={"h-8 w-8", "opacity-30": i != @selected} icon={name} />
-                    <div class="text-xs">{i}</div>
+                    <Iconify.iconify class={"h-8 w-8", "opacity-30": i != @selected} icon={icon} />
+                    <div class="text-xs">{name}</div>
                   </div>
                 {#else}
                   <label class="swap">
@@ -291,13 +291,13 @@ defmodule Bonfire.Poll.VotingLive do
                     <input name={"vote[#{id(@choice)}]"} value={i} type="radio" checked={i == @selected}>
 
                     <div class="flex flex-row swap-on opacity-100">
-                      <Iconify.iconify class="h-8 w-8" icon={name} />
-                      <div class="text-xs">{i}</div>
+                      <Iconify.iconify class="h-8 w-8" icon={icon} />
+                      <div class="text-xs">{name}</div>
                     </div>
 
                     <div class="flex flex-row swap-off">
-                      <Iconify.iconify class="h-8 w-8 opacity-30" icon={name} />
-                      <div class="text-xs">{i}</div>
+                      <Iconify.iconify class="h-8 w-8 opacity-30" icon={icon} />
+                      <div class="text-xs">{name}</div>
                     </div>
                   </label>
                 {/if}

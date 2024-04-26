@@ -12,7 +12,7 @@ defmodule Bonfire.Poll.LiveHandler do
     l("""
     When someone asks a question on Bonfire, they can choose how much weight negative scores carry. Think of it like a volume knob for disagreement. 
 
-    > For example, if one person disagrees with a proposal and gives it -3, while another person agrees with a score of 3, increasing the negative score weighting to x3 would give us -6 instead of a meaningless 0.
+    > For example, if one person disagrees with a proposal and gives it -2, while another person agrees with a score of 2, increasing the negative score weighting to x2 would give us `(-2 x 2) + 2 = -2` instead of a meaningless `-2 + 2 = 0`.
 
     Why does this matter? It's about aiming for consent, instead of settling for everyone kinda-sorta agreeing. By giving more power to negative scores, we're saying "let's prioritize proposals that everyone can live with." Finding the sweet spot for each community or different types of decision might take a bit of experimentation, but that's part of the fun! 
     """)

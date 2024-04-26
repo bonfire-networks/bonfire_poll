@@ -7,23 +7,27 @@ defmodule Bonfire.Poll.Votes do
   alias Bonfire.Social.Objects
   alias Bonfire.Social.Feeds
 
+  # TODO: configurable
   def scores,
     do: [
-      {"∞", "fontisto:ban",
-       "Block: I have to veto this because it would harm somebody or the group, or goes against our shared values or goals"},
-      #   {-3, "fontisto:rage", "Disagree: I'm sure this would be a big mistake"},
-      {-2, "fontisto:frowning", "Disagree: I am strongly opposed"},
-      {-1, "fontisto:confused",
-       "Concerned: I think this would be a mistake or have a different opinion"},
-      {0, "fontisto:neutral", "Step aside: not relevant to me, I don't have an opinion"},
-      {1, "fontisto:slightly-smile", "Seems fine to me"},
-      {2, "fontisto:smiley", "Sounds good"},
-      {3, "fontisto:heart-eyes", "Awesome!"}
+      {"∞", "Block", "fontisto:ban",
+       "I need to express a veto, because this would harm a person or group, or it goes against our shared values or goals"},
+      #   {-3, "Strongly Disagree", "fontisto:rage", "I'm sure this would be a big mistake"},
+      {-2, "Disagree", "fontisto:frowning", "I am strongly opposed"},
+      {-1, "Concerned", "fontisto:confused",
+       "I think this may be a mistake, or I have a different opinion"},
+      {0, "Neutral", "fontisto:neutral", "Not relevant to me, I don't have an opinion"},
+      {1, "Seems fine", "fontisto:slightly-smile", "I'm OK to try this for now"},
+      {2, "Great", "fontisto:heart-eyes",
+       "This meets my needs and aligns with my values and goals"}
+      # {1, "Seems fine", "fontisto:slightly-smile", ""},
+      # {2, "Sounds good", "fontisto:smiley", ""},
+      # {3, "Awesome", "fontisto:heart-eyes", ""}
     ]
 
   def get_score(value, scores \\ scores()) do
     Enum.find(scores, fn
-      {value, _, _} -> true
+      {value, _, _, _} -> true
       _ -> false
     end)
   end

@@ -13,13 +13,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     alias Bonfire.Common.Utils
     alias Bonfire.Common.Types
     alias Bonfire.Poll.Questions
+    alias Bonfire.Poll.Votes
 
     # import_types(Absinthe.Type.Custom)
-
-    object :choice do
-      field(:id, :id)
-      field(:post_content, :post_content)
-    end
 
     object :poll do
       field(:id, :id)
@@ -30,8 +26,25 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     connection(node_type: :poll)
 
+    object :choice do
+      field(:id, :id)
+      field(:post_content, :post_content)
+    end
+
+    object :score do
+      field(:weight, :string)
+      field(:icon, :string)
+      field(:name, :string)
+      field(:summary, :string)
+    end
+
     input_object :poll_filters do
       field(:id, :id)
+    end
+
+    input_object :vote_input do
+      field(:choice_id, :id)
+      field(:weight, :string)
     end
 
     object :poll_queries do
@@ -48,6 +61,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         arg(:filter, :poll_filters)
         resolve(&get_poll/3)
       end
+
+      @desc "List default possible scores"
+      field :default_scores, list_of(:score) do
+        resolve(&list_scores/3)
+      end
     end
 
     object :poll_mutations do
@@ -63,12 +81,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(&create_poll/2)
       end
 
-      # field :vote, :activity do
-      #   arg(:username, non_null(:string))
-      #   arg(:id, non_null(:string))
+      field :vote, :activity do
+        arg(:poll_id, non_null(:string))
+        arg(:votes, list_of(:vote_input))
 
-      #   resolve(&vote/2)
-      # end
+        resolve(&vote/2)
+      end
     end
 
     # def list_polls(_parent, args, info) do
@@ -87,9 +105,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       |> Pagination.connection_paginate(pagination_args)
     end
 
-    # defp prepare_list(%{edges: items_page}) when is_list(items_page) do
-    #   items_page
-    # end
+    def list_scores(_, _, _) do
+      {:ok,
+       Bonfire.Poll.Votes.scores()
+       |> Enum.map(fn {i, name, icon, summary} ->
+         %{weight: i, name: name, icon: icon, summary: summary}
+       end)}
+    end
 
     def get_poll(_parent, %{filter: %{id: id}} = _args, info) do
       Questions.read(id, GraphQL.current_user(info))
@@ -111,16 +133,31 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
-    # defp vote(%{id: to_follow}, info) do
-    #   current_user = GraphQL.current_user(info)
+    defp vote(%{poll_id: question, votes: votes}, info) do
+      current_user = GraphQL.current_user(info)
 
-    #   if current_user do
-    #     with {:ok, f} <- Votes.vote(current_user, question, votes),
-    #          do: {:ok, Utils.e(f, :activity, nil)}
-    #   else
-    #     {:error, "Not authenticated"}  
-    #   end
-    # end
+      if not is_nil(current_user) do
+        with {:ok, f} <-
+               Votes.vote(
+                 current_user,
+                 question,
+                 votes
+                 |> Enum.map(fn
+                   %{choice_id: choice_id, weight: weight} ->
+                     {choice_id, weight}
+
+                   other ->
+                     error(other, "invalid input")
+                     raise Bonfire.Fail, :invalid_argument
+                 end)
+                 |> debug("votes")
+               ),
+             do: {:ok, Utils.e(f, :activity, nil) || f}
+      else
+        # {:error, "Not authenticated"}  
+        raise(Bonfire.Fail.Auth, :needs_login)
+      end
+    end
   end
 else
   IO.warn("Skip GraphQL API")
