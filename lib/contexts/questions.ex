@@ -1,7 +1,7 @@
 defmodule Bonfire.Poll.Questions do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
-  # import Bonfire.Poll.Integration
+  # import Bonfire.Poll
   import Bonfire.Boundaries.Queries
 
   alias Bonfire.Poll.Question

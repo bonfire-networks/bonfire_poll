@@ -1,6 +1,6 @@
 defmodule Bonfire.Poll.Choices do
   use Bonfire.Common.Utils
-  import Bonfire.Poll.Integration
+  import Bonfire.Poll
   alias Bonfire.Poll.Question
   alias Bonfire.Poll.Choice
   alias Bonfire.Epics.Epic

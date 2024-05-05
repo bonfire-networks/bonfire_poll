@@ -17,7 +17,7 @@ defmodule Bonfire.Poll.ChannelCase do
 
   use ExUnit.CaseTemplate
 
-  import Bonfire.Poll.Integration
+  import Bonfire.Poll
 
   using do
     quote do

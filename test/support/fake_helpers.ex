@@ -6,7 +6,7 @@ defmodule Bonfire.Poll.Test.FakeHelpers do
 
   import ExUnit.Assertions
 
-  import Bonfire.Poll.Integration
+  import Bonfire.Poll
 
   import Bonfire.Poll.Fake
 end

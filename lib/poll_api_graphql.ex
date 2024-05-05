@@ -4,7 +4,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     use Absinthe.Schema.Notation
     use Absinthe.Relay.Schema.Notation, :modern
 
-    import Bonfire.Poll.Integration
+    import Bonfire.Poll
     import Untangle
 
     alias Absinthe.Resolution.Helpers

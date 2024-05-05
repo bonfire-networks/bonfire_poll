@@ -15,7 +15,7 @@ defmodule Bonfire.Poll.DataCase do
   """
 
   use ExUnit.CaseTemplate
-  import Bonfire.Poll.Integration
+  import Bonfire.Poll
 
   using do
     quote do

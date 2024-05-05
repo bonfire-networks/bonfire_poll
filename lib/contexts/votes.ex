@@ -1,6 +1,6 @@
 defmodule Bonfire.Poll.Votes do
   use Bonfire.Common.Utils
-  import Bonfire.Poll.Integration
+  import Bonfire.Poll
   alias Bonfire.Poll.{Question, Vote}
   alias Ecto.Changeset
   alias Bonfire.Social.Edges
@@ -192,7 +192,7 @@ defmodule Bonfire.Poll.Votes do
 
         {:ok, vote_activity}
 
-      # Integration.maybe_federate_and_gift_wrap_activity(voter, vote_activity)
+      # Social.maybe_federate_and_gift_wrap_activity(voter, vote_activity)
 
       {:error, e} ->
         case get(voter, question) do
