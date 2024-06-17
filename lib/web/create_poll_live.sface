@@ -49,7 +49,7 @@
                       placeholder: l("Enter a title")
                     }
                     class={
-                      "block w-full border-0 p-2 text-lg font-medium placeholder-base-content/70 bg-base-100 text-base-content border-b border-base-content/10",
+                      "block w-full border-0 p-2 placeholder-base-content/70 bg-base-100 text-base-content border-b border-base-content/10",
                       "!border !border-base-content/30 rounded-lg mb-2": e(@thread_mode, nil) == :flat
                     }
                   />
@@ -77,38 +77,33 @@
               </Field>
 
               <div id="scrollTopicQuestion" />
-              <div class="pb-6">
-                {!-- <p class="text-l">{ l("Title of question") }</p>
-            { text_input @form, :name, class: "input input-bordered w-full" }
-            <br/>
-            <p class="text-l">{ l("Description") }</p>
-            { textarea @form, :description, id: "description" }
-            <br> --}
-                <WeightSelector />
-                <h2 class="text-l">{l("Select mode")}</h2>
-                <PhaseSelector />
-              </div>
-              <div class="py-2 hidden">
-                # TODO
-                <div class="flex justify-between items-center flex-wrap">
+              <div class="flex flex-col p-3 border-t border-base-content/10">
+                <div class="py-2 hidden">
+                  # TODO
+                  <div class="flex justify-between items-center flex-wrap">
+                    <div class="fullOnly">
+                      <h1>{l("question.timeLeftHeading")}</h1>
+                    </div>
+                    <div class="voteOnly">
+                      <h1>{l("question.timeLeftVotingHeading")}</h1>
+                    </div>
+                  </div>
                   <div class="fullOnly">
-                    <h1>{l("question.timeLeftHeading")}</h1>
+                    #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "proposal")
+                    <p />
                   </div>
-                  <div class="voteOnly">
-                    <h1>{l("question.timeLeftVotingHeading")}</h1>
-                  </div>
+                  #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "voting")
                 </div>
-                <div class="fullOnly">
-                  #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "proposal")
-                  <p />
+                <div class="voteOnly divide-y divide-base-content/10 flex flex-col gap-2">
+                  <!-- <h2 class="text-l">{l("Proposals")}</h2> -->
+                  {#for {proposal, index} <- Enum.with_index(@proposals)}
+                    <Bonfire.Poll.EditProposalLive proposal={proposal} index={index} />
+                  {/for}
                 </div>
-                #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "voting")
-              </div>
-              <div class="voteOnly mt-4">
-                <h2 class="text-l">{l("Proposals")}</h2>
-                {#for {proposal, index} <- Enum.with_index(@proposals)}
-                  <Bonfire.Poll.EditProposalLive proposal={proposal} index={index} />
-                {/for}
+                <div class="flex gap-3 items-center">
+                  <WeightSelector />
+                  <PhaseSelector />
+                </div>
                 <Bonfire.Poll.AddProposal event_target={@myself} />
               </div>
             </div>

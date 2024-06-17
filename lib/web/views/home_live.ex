@@ -15,7 +15,11 @@ defmodule Bonfire.Poll.HomeLive do
        smart_input_opts: %{wysiwyg: false, prompt: l("Create a poll")},
        changeset: changeset,
        form: to_form(changeset),
-       proposals: []
+       page: "Poll",
+       page_title: "Poll",
+       back: true,
+       proposals: [],
+       nav_items: Bonfire.Common.ExtensionModule.default_nav()
      )}
   end
 end

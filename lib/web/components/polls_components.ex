@@ -5,10 +5,30 @@ defmodule Bonfire.Poll.WeightSelector do
 
   def render(assigns) do
     ~F"""
-    <weight-selector>
+    <div class="flex-1">
+      <!--div class="text-sm text-base-content/90">
+        {l("Negative Score Weighting")}
+      </div-->
+      <span class="flex justify-center items-center">
+        <select id="select" name="weighting" class="select select-sm select-bordered" value={@weighting}>
+          {#for weight <- 1..7}
+            {#if weight < 7}
+              <option value={weight}>
+                {l("Negative Score Weighting")} x{weight}
+              </option>
+            {#else}
+              <option value="0">
+                &infin;
+              </option>
+            {/if}
+          {/for}
+        </select>
+      </span>
+    </div>
+    <!--weight-selector>
       <div class="collapse collapse-arrow bg-base-200">
         <input type="checkbox">
-        <div class="collapse-title text-l font-medium">
+        <div class="collapse-title font-medium">
           {l("Negative Score Weighting")}
         </div>
         <div class="collapse-content prose">
@@ -30,7 +50,7 @@ defmodule Bonfire.Poll.WeightSelector do
           {/for}
         </select>
       </span>
-    </weight-selector>
+    </weight-selector-->
     """
   end
 end
@@ -42,7 +62,11 @@ defmodule Bonfire.Poll.PhaseSelector do
 
   def render(assigns) do
     ~F"""
-    <phase-selector>
+    <select class="select select-sm select-bordered w-full max-w-full">
+      <option value="full" selected={@selected_phase === "full"}>{l("Request options before voting")}</option>
+      <option value="voting" selected={@selected_phase === "voting"}>{l("Request votes on predefined options")}</option>
+    </select>
+    <!-- phase-selector>
       <div class="flex justify-around">
         <div class="flex items-center">
           <input
@@ -53,7 +77,7 @@ defmodule Bonfire.Poll.PhaseSelector do
             class="radio radio-primary"
             checked={@selected_phase === "full"}
           />
-          <label for="full-phase" class="mx-2 cursor-pointer">{l("Request options before voting")}</label>
+          <label for="full-phase" class="ml-2 text-sm text-base-content/70 cursor-pointer">{l("Request options before voting")}</label>
         </div>
         <div class="flex items-center">
           <input
@@ -64,10 +88,10 @@ defmodule Bonfire.Poll.PhaseSelector do
             class="radio radio-primary"
             checked={@selected_phase === "voting"}
           />
-          <label for="voting-phase" class="mx-2 cursor-pointer">{l("Request votes on predefined options")}</label>
+          <label for="voting-phase" class="ml-2 text-sm text-base-content/70 cursor-pointer">{l("Request votes on predefined options")}</label>
         </div>
       </div>
-    </phase-selector>
+    </phase-selector -->
     """
   end
 end
@@ -79,32 +103,37 @@ defmodule Bonfire.Poll.EditProposalLive do
 
   def render(assigns) do
     ~F"""
-    <div class="proposal card outline outline-1 shadow-xl py-4 px-4 my-2 w-full">
+    <div class="pt-2">
       <div class="flex items-center flex-col">
-        <div class="flex flex-col w-full">
-          <b>{l("Proposed choice")}</b>
+        <div class="flex items-center gap-2 w-full">
+          <button
+            phx-click="delete_proposal"
+            data-index={@index}
+            class="delete btn btn-sm btn-circle btn-outline"
+          >
+            <span class="sr-only">{l("delete")}</span>
+            <#Icon iconify="iwwa:delete" class="w-3 h-3" />
+          </button>
+          <!-- div class="font-medium text-sm">{l("Proposed choice")}</div -->
           <input
             id={"name-#{@index}"}
             name={"choices[#{@index}][name]"}
             type="text"
-            class="input input-bordered input-sm my-2 w-full"
+            placeholder={l("Proposed choice")}
+            class="input input-bordered input-sm w-full"
             value={e(@proposal, :name, nil)}
           />
-          <label>{l("Description and rationale")}</label>
-          <textarea
+          <!-- label>{l("Description")}</label -->
+          <!-- textarea
+            class="textarea textarea-bordered w-full"
             id={"description-#{@index}"}
             name={"choices[#{@index}][description]"}
             data-index={@index}
-          >{e(@proposal, :description, nil)}</textarea>
+          >{e(@proposal, :description, nil)}</textarea -->
         </div>
       </div>
       <div class="flex justify-center w-full pt-2 hidden">
         # TODO
-        <button
-          phx-click="delete_proposal"
-          data-index={@index}
-          class="delete btn btn-ghost text-error btn-xs"
-        >{l("delete")}</button>
       </div>
     </div>
     """
@@ -131,29 +160,35 @@ defmodule Bonfire.Poll.AddProposal do
 
   def render(assigns) do
     ~F"""
-    <add-proposal class="flex items-center flex-wrap">
+    <add-proposal class="flex items-center gap-3 mt-2 flex-wrap">
       <div
         type="botton"
         date-role="add-button"
-        class="btn p-2"
+        class="btn flex-1 w-full btn-outline btn-sm"
         phx-click="Bonfire.Poll:add_proposal"
         phx-target={@event_target}
       >
-        {l("Add a proposal")}
+        <span class="">{l("Add a proposal")}</span>
       </div>
-      <div class="dropdown dropdown-top">
-        <label tabindex="0" class="btn m-1">{l("Proposal templates")}</label>
-        <ul tabindex="0" class="dropdown-content menu p-2 bg-base-200 shadow rounded-box">
+      <div class="dropdown flex dropdown-end dropdown-top">
+        <label tabindex="0" class="btn btn-circle btn-sm btn-outline">
+          <span class="sr-only">{l("Add a proposal template")}</span>
+          <#Icon iconify="ic:outline-poll" class="w-4 h-4" />
+        </label>
+        <ul
+          tabindex="0"
+          class="dropdown-content mb-2 w-60 menu p-2 bg-base-100 shadow-sm border border-base-content/10 rounded-xl"
+        >
           {#for option <- templates()}
             <li>
               <a
-                class="flex flex-col"
+                class="flex gap-0 flex-col"
                 phx-click="Bonfire.Poll:add_proposal"
                 phx-target={@event_target}
                 phx-value-name={option.description}
                 phx-value-description={option.description}
               >
-                <b class="name">{option.name}</b>
+                <b class="name text-left w-full">{option.name}</b>
                 <p class="description">{rich(option.description)}</p>
               </a>
             </li>
