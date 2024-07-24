@@ -92,7 +92,7 @@ defmodule Bonfire.Poll.Votes do
            |> load_choices(voter, opts)
            |> debug("loaded_choices")
            |> Enum.map(&register_vote_choice(voter, question, &1, opts))
-           |> only_ok()
+           |> all_oks_or_error()
            |> debug("oks"),
          #  |> Enum.split_with(fn # TODO: more generic
          #    {:ok, _} -> true
