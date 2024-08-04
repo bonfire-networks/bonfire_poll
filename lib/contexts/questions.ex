@@ -44,14 +44,7 @@ defmodule Bonfire.Poll.Questions do
   end
 
   def run_epic(type, options, module \\ __MODULE__, on \\ :question) do
-    options = Keyword.merge(options, crash: false, debug: true, verbose: false)
-
-    epic =
-      Epic.from_config!(module, type)
-      |> Epic.assign(:options, options)
-      |> Epic.run()
-
-    if epic.errors == [], do: {:ok, epic.assigns[on]}, else: {:error, epic}
+    Bonfire.Epics.run_epic(module, type, Keyword.put(options, :on, on))
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [])
