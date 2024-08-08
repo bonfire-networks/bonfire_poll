@@ -177,7 +177,7 @@ defmodule Bonfire.Poll.AddProposal do
         </label>
         <ul
           tabindex="0"
-          class="dropdown-content mb-2 w-60 menu p-2 bg-base-100 shadow-sm border border-base-content/10 rounded-xl"
+          class="dropdown-content mb-2 w-60 menu p-2 bg-base-100 shadow-sm border border-base-content/20 rounded-xl"
         >
           {#for option <- templates()}
             <li>
