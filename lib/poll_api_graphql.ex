@@ -4,6 +4,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     use Absinthe.Schema.Notation
     use Absinthe.Relay.Schema.Notation, :modern
 
+    use Bonfire.Common.E
     import Bonfire.Poll
     import Untangle
 
@@ -152,7 +153,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                  end)
                  |> debug("votes")
                ),
-             do: {:ok, Utils.e(f, :activity, nil) || f}
+             do: {:ok, e(f, :activity, nil) || f}
       else
         # {:error, "Not authenticated"}  
         raise(Bonfire.Fail.Auth, :needs_login)
