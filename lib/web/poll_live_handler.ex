@@ -190,7 +190,7 @@ defmodule Bonfire.Poll.LiveHandler do
   def handle_event("add_choice", %{"choice_id" => choice_id} = params, socket) do
     question = e(socket.assigns, :object, nil) || e(params, "question_id", nil)
 
-    Bonfire.Poll.Choices.put_choice(ulid!(choice_id), ulid!(question))
+    Bonfire.Poll.Choices.put_choice(uid!(choice_id), uid!(question))
     |> debug("put_choice")
 
     {
@@ -208,7 +208,7 @@ defmodule Bonfire.Poll.LiveHandler do
   def handle_event("remove_section", %{"choice_id" => choice_id} = params, socket) do
     question = e(socket.assigns, :object, nil) || e(params, "question_id", nil)
 
-    Bonfire.Poll.Choices.remove_choice(ulid!(choice_id), ulid!(question))
+    Bonfire.Poll.Choices.remove_choice(uid!(choice_id), uid!(question))
     |> debug("remove_choice")
 
     {

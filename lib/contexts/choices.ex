@@ -58,8 +58,8 @@ defmodule Bonfire.Poll.Choices do
   def put_choice(choice, question, position \\ nil) do
     with {:ok, %Ecto.Changeset{valid?: true} = cs} <-
            Bonfire.Data.Assort.Ranked.changeset(%{
-             item_id: ulid(choice),
-             scope_id: ulid(question),
+             item_id: uid(choice),
+             scope_id: uid(question),
              rank_set: position
            })
            |> Ecto.Changeset.unique_constraint([:item_id, :scope_id],
