@@ -114,7 +114,7 @@ defmodule Bonfire.Poll.LiveHandler do
      socket
      |> assign(
        :proposals,
-       socket.assigns[:proposals] ++ [%{name: name, description: description}]
+       assigns(socket)[:proposals] ++ [%{name: name, description: description}]
      )}
   end
 
@@ -122,7 +122,7 @@ defmodule Bonfire.Poll.LiveHandler do
     # Logic to handle adding a proposal goes here
     {:noreply,
      socket
-     |> assign(:proposals, socket.assigns[:proposals] ++ [%{}])}
+     |> assign(:proposals, assigns(socket)[:proposals] ++ [%{}])}
   end
 
   def handle_event("add_choices", params, socket) do
@@ -134,7 +134,7 @@ defmodule Bonfire.Poll.LiveHandler do
 
     # |> debug("post attrs")
 
-    # debug(e(socket.assigns, :showing_within, nil), "SHOWING")
+    # debug(e(assigns(socket), :showing_within, nil), "SHOWING")
 
     page_id = e(attrs, :reply_to, :thread_id, nil)
 
@@ -188,7 +188,7 @@ defmodule Bonfire.Poll.LiveHandler do
   end
 
   def handle_event("add_choice", %{"choice_id" => choice_id} = params, socket) do
-    question = e(socket.assigns, :object, nil) || e(params, "question_id", nil)
+    question = e(assigns(socket), :object, nil) || e(params, "question_id", nil)
 
     Bonfire.Poll.Choices.put_choice(uid!(choice_id), uid!(question))
     |> debug("put_choice")
@@ -206,7 +206,7 @@ defmodule Bonfire.Poll.LiveHandler do
   end
 
   def handle_event("remove_section", %{"choice_id" => choice_id} = params, socket) do
-    question = e(socket.assigns, :object, nil) || e(params, "question_id", nil)
+    question = e(assigns(socket), :object, nil) || e(params, "question_id", nil)
 
     Bonfire.Poll.Choices.remove_choice(uid!(choice_id), uid!(question))
     |> debug("remove_choice")
