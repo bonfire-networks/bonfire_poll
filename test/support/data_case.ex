@@ -23,6 +23,8 @@ defmodule Bonfire.Poll.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       # import Bonfire.Poll.DataCase
+
+      @moduletag :backend
     end
   end
 
