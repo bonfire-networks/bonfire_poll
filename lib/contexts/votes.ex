@@ -168,11 +168,11 @@ defmodule Bonfire.Poll.Votes do
          (
            boosted =
              Objects.preload_creator(boosted)
-             |> flood("boosted object")
+             |> debug("the object")
 
            Objects.object_creator(boosted)
          ))
-      |> flood("the creator")
+      |> debug("the creator")
 
     choice_creators =
       registered_votes
