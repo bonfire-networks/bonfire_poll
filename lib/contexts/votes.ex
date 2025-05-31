@@ -163,8 +163,16 @@ defmodule Bonfire.Poll.Votes do
   end
 
   def send_vote_activity(%{} = voter, %{} = question, registered_votes, opts) do
-    question = Objects.preload_creator(question)
-    question_object_creator = Objects.object_creator(question)
+    object_creator =
+      (opts[:object_creator] ||
+         (
+           boosted =
+             Objects.preload_creator(boosted)
+             |> flood("boosted object")
+
+           Objects.object_creator(boosted)
+         ))
+      |> flood("the creator")
 
     choice_creators =
       registered_votes
@@ -175,11 +183,11 @@ defmodule Bonfire.Poll.Votes do
       [
         # TODO: make configurable
         boundary: "mentions",
-        to_circles: [Enums.id(question_object_creator), Enums.ids(choice_creators)],
+        to_circles: [Enums.id(object_creator), Enums.ids(choice_creators)],
         to_feeds:
           Feeds.maybe_creator_notification(
             voter,
-            [question_object_creator, choice_creators],
+            [object_creator, choice_creators],
             opts
           )
       ] ++ List.wrap(opts)
