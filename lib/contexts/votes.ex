@@ -86,20 +86,30 @@ defmodule Bonfire.Poll.Votes do
   end
 
   def vote(voter, question, choices, opts) do
-    # multiple choice
-    with {:ok, votes} <-
-           choices
-           |> load_choices(voter, opts)
-           |> debug("loaded_choices")
-           |> Enum.map(&register_vote_choice(voter, question, &1, opts))
-           |> all_oks_or_error()
-           |> debug("oks"),
-         #  |> Enum.split_with(fn # TODO: more generic
-         #    {:ok, _} -> true
-         #    _ -> false
-         #  end),
-         {:ok, vote_activity} <- send_vote_activity(voter, question, votes, opts) do
-      {:ok, vote_activity}
+    # Ensure question struct
+    question =
+      case question do
+        %{} -> question
+        id when is_binary(id) -> Bonfire.Poll.Questions.read(id, current_user: voter)
+      end
+
+    voting_format =
+      Map.get(question, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format()
+
+    if voting_format == "single" and length(choices) > 1 do
+      {:error, "Only one choice allowed for single-choice polls"}
+    else
+      # multiple choice
+      with {:ok, votes} <-
+             choices
+             |> load_choices(voter, opts)
+             |> debug("loaded_choices")
+             |> Enum.map(&register_vote_choice(voter, question, &1, opts))
+             |> all_oks_or_error()
+             |> debug("oks"),
+           {:ok, vote_activity} <- send_vote_activity(voter, question, votes, opts) do
+        {:ok, vote_activity}
+      end
     end
   end
 
@@ -157,21 +167,19 @@ defmodule Bonfire.Poll.Votes do
   defp do_create_vote_choice(voter, choice, weight, opts) do
     # don't create an activity or set ACLs on each individual vote on a choice, since we do that in `send_vote_activity/4` instead
     Edges.changeset_base_with_creator(Vote, voter, choice, opts)
-    |> Vote.changeset(%{vote_weight: weight})
+    |> Vote.changeset(%{vote_weight: weight || 1})
     |> debug("csss")
     |> Edges.insert(voter, choice)
   end
 
   def send_vote_activity(%{} = voter, %{} = question, registered_votes, opts) do
+    question =
+      Objects.preload_creator(question)
+      |> debug("the object")
+
     object_creator =
       (opts[:object_creator] ||
-         (
-           boosted =
-             Objects.preload_creator(boosted)
-             |> debug("the object")
-
-           Objects.object_creator(boosted)
-         ))
+         Objects.object_creator(question))
       |> debug("the creator")
 
     choice_creators =

@@ -66,7 +66,7 @@ defmodule Bonfire.Poll.PhaseSelector do
       <option value="full" selected={@selected_phase === "full"}>{l("Request options before voting")}</option>
       <option value="voting" selected={@selected_phase === "voting"}>{l("Request votes on predefined options")}</option>
     </select>
-    <!-- phase-selector>
+    <!-- 
       <div class="flex justify-around">
         <div class="flex items-center">
           <input
@@ -90,8 +90,7 @@ defmodule Bonfire.Poll.PhaseSelector do
           />
           <label for="voting-phase" class="ml-2 text-sm text-base-content/70 cursor-pointer">{l("Request votes on predefined options")}</label>
         </div>
-      </div>
-    </phase-selector -->
+      </div> -->
     """
   end
 end
@@ -282,65 +281,6 @@ defmodule Bonfire.Poll.VotingCSSLive do
   def render(assigns) do
     ~F"""
     <div class="outline outline-success outline-warning outline-error">
-    </div>
-    """
-  end
-end
-
-defmodule Bonfire.Poll.VotingLive do
-  use Bonfire.UI.Common.Web, :stateless_component
-
-  prop choice, :any, default: nil
-  prop selected, :any, default: 0
-  prop readonly, :boolean, default: false
-  prop scores, :list, default: nil
-
-  def render(assigns) do
-    ~F"""
-    <!--        <span class='flex justify-end'>
-          <span>{ l("Voters") }:&nbsp;</span>
-          <span class='no-voters'>{ length(@question.voters || []) }</span>
-        </span> -->
-    <div class="proposal-list">
-      <div
-        class="proposal card outline outline-1 shadow-xl py-2 px-4 my-4"
-        style={"outline-color: oklch(var(--#{cond do
-          is_number(@selected) and @selected > 0 -> "su"
-          @selected < 0 -> "wa"
-          @selected == "∞" -> "er"
-          true -> "n"
-        end}));"}
-      >
-        <div class="flex justify-between">
-          {#for {i, name, icon, description} <- @scores || Bonfire.Poll.Votes.scores()}
-            <div class={"flex", "text-success": is_number(i) and i > 0, "text-warning": i < 0, "text-error": i == "∞"}>
-              <div class="tooltip" data-tip={"#{description} (#{i})"}>
-                {#if @readonly}
-                  <div class="flex flex-row">
-                    <Iconify.iconify class={"h-8 w-8", "opacity-30": i != @selected} icon={icon} />
-                    <div class="text-xs">{name}</div>
-                  </div>
-                {#else}
-                  <label class="swap">
-                    <!-- this hidden checkbox controls the state -->
-                    <input name={"vote[#{id(@choice)}]"} value={i} type="radio" checked={i == @selected}>
-
-                    <div class="flex flex-row swap-on opacity-100">
-                      <Iconify.iconify class="h-8 w-8" icon={icon} />
-                      <div class="text-xs">{name}</div>
-                    </div>
-
-                    <div class="flex flex-row swap-off">
-                      <Iconify.iconify class="h-8 w-8 opacity-30" icon={icon} />
-                      <div class="text-xs">{name}</div>
-                    </div>
-                  </label>
-                {/if}
-              </div>
-            </div>
-          {/for}
-        </div>
-      </div>
     </div>
     """
   end

@@ -1,4 +1,4 @@
-defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
+defmodule Bonfire.Poll.Web.Preview.ChoiceContentLive do
   use Bonfire.UI.Common.Web, :stateless_component
   alias Bonfire.Common.Text
 
@@ -17,8 +17,16 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
 
   prop vote, :boolean, default: false
 
-  def preloads(),
-    do: [
-      :post_content
-    ]
+  def post_content(object) do
+    (e(object, :post_content, nil) || object)
+    |> debug("activity_choice_object")
+  end
+
+  def maybe_truncate(input, skip \\ false, length \\ 800)
+
+  def maybe_truncate(input, skip, length) when skip != true and is_binary(input) do
+    Text.sentence_truncate(input, length, "...")
+  end
+
+  def maybe_truncate(input, _skip, _length), do: input
 end

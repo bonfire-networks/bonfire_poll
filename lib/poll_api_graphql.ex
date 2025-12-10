@@ -23,6 +23,96 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:post_content, :post_content)
       field(:choices, list_of(:choice))
       field(:activity, :activity)
+
+      field :proposals_open_at, :datetime do
+        resolve(fn poll, _, _ ->
+          {:ok, poll.proposal_dates |> List.first()}
+        end)
+      end
+
+      field :proposals_close_at, :datetime do
+        resolve(fn poll, _, _ ->
+          {:ok, poll.proposal_dates |> List.last()}
+        end)
+      end
+
+      field :voting_open_at, :datetime do
+        resolve(fn poll, _, _ ->
+          {:ok, poll.voting_dates |> List.first()}
+        end)
+      end
+
+      field :voting_close_at, :datetime do
+        resolve(fn poll, _, _ ->
+          {:ok, poll.voting_dates |> List.last()}
+        end)
+      end
+
+      field :votes_count, :integer do
+        resolve(fn poll, _, _ ->
+          # Sum votes for all choices
+          count =
+            poll.choices
+            # TODO: avoid N+1?
+            |> Enum.map(fn choice -> Bonfire.Poll.Votes.count(choice, []) end)
+            |> Enum.sum()
+
+          {:ok, count}
+        end)
+      end
+
+      field :voters_count, :integer do
+        resolve(fn poll, _, _ ->
+          # Get all votes for choices, extract unique voter ids
+          votes =
+            poll.choices
+            |> Enum.flat_map(fn choice ->
+              # TODO: avoid N+1 and avoid loading data if we only need a count?
+              Bonfire.Poll.Votes.query([object: choice], []) |> Bonfire.Poll.Votes.repo().all()
+            end)
+
+          count =
+            votes
+            |> Enum.map(& &1.subject_id)
+            |> Enum.uniq()
+            |> length()
+
+          {:ok, count}
+        end)
+      end
+
+      field :voted, :boolean do
+        resolve(fn poll, _, %{context: %{current_user: user}} ->
+          voted =
+            poll.choices
+            |> Enum.any?(fn choice ->
+              # TODO: avoid N+1
+              case Bonfire.Poll.Votes.get(user, choice) do
+                {:ok, _} -> true
+                _ -> false
+              end
+            end)
+
+          {:ok, voted}
+        end)
+      end
+
+      field :own_votes, list_of(:choice) do
+        resolve(fn poll, _, %{context: %{current_user: user}} ->
+          voted_choices =
+            poll.choices
+            |> Enum.filter(fn choice ->
+              case Bonfire.Poll.Votes.get(user, choice) do
+                {:ok, _} -> true
+                _ -> false
+              end
+            end)
+
+          {:ok, voted_choices}
+        end)
+      end
+
+      field :voting_format, :string
     end
 
     connection(node_type: :poll)
@@ -30,6 +120,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     object :choice do
       field(:id, :id)
       field(:post_content, :post_content)
+
+      field(:votes_count, :integer) do
+        resolve(fn choice, _, _ ->
+          # TODO: avoid N+1
+          {:ok, Bonfire.Poll.Votes.count(choice, [])}
+        end)
+      end
     end
 
     object :score do
@@ -71,6 +168,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
     object :poll_mutations do
       field :create_poll, :poll do
+        arg(:voting_format, :string)
+
         arg(:post_content, non_null(:post_content_input))
 
         arg(:choices, list_of(:post_content_input))

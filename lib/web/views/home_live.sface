@@ -1,6 +1,17 @@
-<Bonfire.UI.Common.SmartInputButtonLive
+{!-- <Bonfire.UI.Common.SmartInputButtonLive
   class="gap-2 mt-3 normal-case rounded-full btn-outline !border !border-primary/30 btn btn-sm btn-primary"
-  create_object_type={:poll}
   icon="material-symbols:how-to-vote"
   prompt={l("Create a poll")}
-/>
+  component={Bonfire.Poll.Web.CreatePollLive}
+/> --}
+{!-- create_object_type={:poll} --}
+
+<div class="">
+  <Bonfire.UI.Common.SmartInputInlineLive
+    id={:smart_input}
+    showing_within={:page}
+    title_open
+    smart_input_component={Bonfire.Poll.Web.CreatePollLive}
+    smart_input_opts={[input_status: :draft]}
+  />
+</div>

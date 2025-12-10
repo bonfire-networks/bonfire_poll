@@ -86,7 +86,7 @@
   </div>
 
   {#if not is_nil(e(@object, :choices, nil))}
-    <div class="flex justify-end items-center">
+    <div :if={e(@object, :weighting, nil)} class="flex justify-end items-center">
       <div class="collapse collapse-arrow bg-base-200">
         <input type="checkbox">
         <div class="collapse-title text-l font-medium">
@@ -113,6 +113,7 @@
             showing_within={@showing_within}
             is_remote={@is_remote}
             hide_actions={@hide_actions}
+            voting_format={e(@object, :voting_format, nil)}
           />
         {/for}
       {#elseif e(@object, :voting_dates, nil) != false}
@@ -127,6 +128,7 @@
               showing_within={@showing_within}
               is_remote={@is_remote}
               hide_actions={@hide_actions}
+              voting_format={e(@object, :voting_format, nil)}
               vote
             />
           {/for}

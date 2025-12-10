@@ -19,7 +19,15 @@ defmodule Bonfire.Poll.HomeLive do
        page_title: "Poll",
        back: true,
        proposals: [],
-       nav_items: Bonfire.Common.ExtensionModule.default_nav()
+       nav_items: Bonfire.Common.ExtensionModule.default_nav(),
+       without_sidebar: true,
+       without_secondary_widgets: true,
+       smart_input_opts: [
+         #  create_object_type: maybe_to_atom(e(session, "create_object_type", nil)),
+         inline_only: true,
+         hide_buttons: true
+         #  text: e(session, "smart_input_text", nil)
+       ]
      )}
   end
 end

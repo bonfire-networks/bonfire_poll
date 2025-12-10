@@ -12,7 +12,11 @@ defmodule Bonfire.Poll.Question do
     field :proposal_dates, {:array, :utc_datetime_usec}
     field :voting_dates, {:array, :utc_datetime_usec}
     field :weighting, :integer
+    field :voting_format, :string
   end
+
+  def voting_formats,
+    do: Config.get([:bonfire_poll, :voting_formats], ~w(single multiple weighted_multiple))
 
   @doc false
   def changeset(question \\ %Bonfire.Poll.Question{}, attrs) do
@@ -21,10 +25,11 @@ defmodule Bonfire.Poll.Question do
     |> cast(attrs, [
       :proposal_dates,
       :voting_dates,
-      :weighting
+      :weighting,
+      :voting_format
     ])
-
-    # |> validate_required([:name])
+    |> validate_required([:voting_format])
+    |> validate_inclusion(:voting_format, voting_formats())
   end
 end
 
@@ -42,6 +47,12 @@ defmodule Bonfire.Poll.Question.Migration do
         Ecto.Migration.add(:proposal_dates, {:array, :utc_datetime_usec})
         Ecto.Migration.add(:voting_dates, {:array, :utc_datetime_usec})
         Ecto.Migration.add(:weighting, :integer)
+
+        Ecto.Migration.add(:voting_format, :string,
+          null: false,
+          default: Application.get_env(:bonfire_poll, :default_voting_format, "weighted_multiple")
+        )
+
         unquote_splicing(exprs)
       end
     end

@@ -9,8 +9,11 @@ defmodule Bonfire.Poll.Questions do
   alias Bonfire.Epics.Epic
   alias Bonfire.Social.Objects
 
+  def default_voting_format, do: Config.get([:bonfire_poll, :default_voting_format], "single")
+
   def create(options \\ []) do
     # TODO: sanitise HTML to a certain extent depending on is_admin and/or boundaries
+
     with {:ok, question} <- run_epic(:create, options ++ [do_not_strip_html: true]) do
       Choices.simple_create_and_put(options[:question_attrs][:choices] || [], question, options)
       |> debug("choices added")
@@ -22,7 +25,16 @@ defmodule Bonfire.Poll.Questions do
     end
   end
 
+  def run_epic(type, options, module \\ __MODULE__, on \\ :question) do
+    Bonfire.Epics.run_epic(module, type, Keyword.put(options, :on, on))
+  end
+
   def changeset(question \\ %Bonfire.Poll.Question{}, attrs) do
+    # Ensure voting_format is present in question_attrs or set to default
+    attrs =
+      attrs
+      |> Map.put_new(:voting_format, default_voting_format())
+
     Question.changeset(question, attrs)
   end
 
@@ -41,10 +53,6 @@ defmodule Bonfire.Poll.Questions do
     attrs
     |> changeset()
     |> create_simple()
-  end
-
-  def run_epic(type, options, module \\ __MODULE__, on \\ :question) do
-    Bonfire.Epics.run_epic(module, type, Keyword.put(options, :on, on))
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [])

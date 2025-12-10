@@ -1,0 +1,57 @@
+{!--        <span class='flex justify-end'>
+        <span>{ l("Voters") }:&nbsp;</span>
+        <span class='no-voters'>{ length(@question.voters || []) }</span>
+    </span> --}
+<div class="proposal-list">
+  <div
+    class="proposal card outline outline-1 shadow-xl py-2 px-4 my-4"
+    style={"outline-color: oklch(var(--#{cond do
+      is_number(@selected) and @selected > 0 -> "su"
+      @selected < 0 -> "wa"
+      @selected == "∞" -> "er"
+      true -> "n"
+    end}));"}
+  >
+    <div class="flex justify-between">
+      {#case @voting_format || Bonfire.Poll.Questions.default_voting_format()}
+        {#match "weighted_multiple"}
+          {#for {i, name, icon, description} <- @scores || Bonfire.Poll.Votes.scores()}
+            <div class={["flex", "text-success": is_number(i) and i > 0, "text-warning": i < 0, "text-error": i == "∞"]}>
+              <div class="tooltip" data-tip={"#{description} (#{i})"}>
+                {#if @readonly}
+                  <div class="flex flex-row">
+                    <Iconify.iconify class={["h-8 w-8", "opacity-30": i != @selected]} icon={icon} />
+                    <div class="text-xs">{name}</div>
+                  </div>
+                {#else}
+                  <label class="swap">
+                    <input name={"vote[#{id(@choice)}]"} value={i} type="radio" checked={i == @selected}>
+                    <div class="flex flex-row swap-on opacity-100">
+                      <Iconify.iconify class="h-8 w-8" icon={icon} />
+                      <div class="text-xs">{name}</div>
+                    </div>
+                    <div class="flex flex-row swap-off">
+                      <Iconify.iconify class="h-8 w-8 opacity-30" icon={icon} />
+                      <div class="text-xs">{name}</div>
+                    </div>
+                  </label>
+                {/if}
+              </div>
+            </div>
+          {/for}
+        {#match "multiple"}
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name={"vote[#{id(@choice)}]"} value="1" checked={!!@selected}>
+            <#slot />
+          </label>
+        {#match "single"}
+          <label class="flex items-center gap-2">
+            <input type="radio" name={"vote[#{id(@choice)}]"} value="1" checked={!!@selected}>
+            <#slot />
+          </label>
+        {#match _}
+          {!-- fallback: show nothing or a message --}
+      {/case}
+    </div>
+  </div>
+</div>
