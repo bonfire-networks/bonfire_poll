@@ -11,7 +11,8 @@ defmodule Bonfire.Poll.Fake do
       Keyword.merge(
         [
           question_attrs: Map.merge(default, attrs),
-          current_user: opts[:current_user] || Bonfire.Me.Fake.fake_user!()
+          current_user: opts[:current_user] || Bonfire.Me.Fake.fake_user!(),
+          boundary: opts[:boundary] || "public"
         ],
         opts
       )

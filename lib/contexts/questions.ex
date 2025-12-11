@@ -6,6 +6,7 @@ defmodule Bonfire.Poll.Questions do
 
   alias Bonfire.Poll.Question
   alias Bonfire.Poll.Choices
+  alias Bonfire.Poll.Votes
   alias Bonfire.Epics.Epic
   alias Bonfire.Social.Objects
 
@@ -18,8 +19,6 @@ defmodule Bonfire.Poll.Questions do
   def federation_module,
     do: [
       "Question",
-      "Answer",
-      {"Create", "Question"},
       {"Update", "Question"}
     ]
 
@@ -29,9 +28,9 @@ defmodule Bonfire.Poll.Questions do
     # TODO: sanitise HTML to a certain extent depending on is_admin and/or boundaries
 
     with {:ok, question} <- run_epic(:create, options ++ [do_not_strip_html: true]) do
-      #  TODO: add in an Epic instead?
-      Choices.simple_create_and_put(options[:question_attrs][:choices] || [], question, options)
-      |> debug("choices added")
+      # #  TODO: add in an Epic instead?
+      # Choices.simple_create_and_put(options[:question_attrs][:choices] || [], question, options)
+      # |> debug("choices added")
 
       {:ok,
        question
@@ -178,24 +177,11 @@ defmodule Bonfire.Poll.Questions do
     # , choices: {"choice_", [:post_content]}
   end
 
-  defp find_choice_by_name(question, name) do
-    question = repo().maybe_preload(question, :choices)
-
-    case Enum.find(question.choices, fn c ->
-           e(c, :post_content, :name, nil) || e(c, :post_content, :summary, nil) ||
-             e(c, :post_content, :html_body, nil) == name
-         end) do
-      nil -> {:error, :not_found}
-      choice -> {:ok, choice}
-    end
-  end
-
-  defp get_by_uri(uri) do
-    # TODO: Find question by canonical URL
-    case repo().get_by(schema_module(), canonical_url: uri) do
-      nil -> {:error, :not_found}
-      question -> {:ok, question}
-    end
+  def get_by_uri(uri, opts \\ []) do
+    # WIP: Find question by canonical URL
+    Bonfire.Federate.ActivityPub.Peered.get_by_uri(uri)
+    ~> Enums.id()
+    |> read(opts)
   end
 
   @doc """
@@ -210,7 +196,11 @@ defmodule Bonfire.Poll.Questions do
     {:ok, actor} = ActivityPub.Actor.get_cached(pointer: subject)
 
     # Preload choices and votes
-    question = repo().maybe_preload(question, choices: [:votes])
+    question =
+      question
+      |> repo().maybe_preload(choices: [:post_content])
+      |> debug("preloaded question for ap_publish_activity")
+
     choices = question.choices || []
 
     # Determine voting format and options key
@@ -224,13 +214,17 @@ defmodule Bonfire.Poll.Questions do
     # Build choices array
     options =
       Enum.map(choices, fn choice ->
-        votes = choice.votes || []
-        # FIXME: should we instead do a weighted count if necessary?
-        vote_count = Enum.count(votes, fn v -> v.choice_id == choice.id end)
-
         name = e(choice, :post_content, :name, nil)
         summary = e(choice, :post_content, :summary, nil)
         content = e(choice, :post_content, :html_body, nil)
+
+        #  TODO: avoid n+1
+        vote_count =
+          with {:ok, votes} <- Votes.for_choice(choice, current_user: subject) do
+            votes = choice.votes || []
+            # FIXME: should we instead do a weighted count if necessary?
+            Enum.count(votes, fn v -> v.choice_id == choice.id end)
+          end
 
         %{
           "type" => "Note",
@@ -275,10 +269,11 @@ defmodule Bonfire.Poll.Questions do
         "closed" =>
           if(voting_ended?(question),
             do: DatesTimes.to_iso8601(end_date(question.voting_dates || []))
-          ),
-        # "votersCount" => voters_count, # TODO!
-        options_key => options
+          )
+        # "votersCount" => voters_count # TODO!
       })
+      |> Map.put(options_key, options)
+      |> debug("composed question_obj")
 
     # Boundary/circle logic (reuse from Posts)
     is_public = Bonfire.Boundaries.object_public?(question)
@@ -291,27 +286,29 @@ defmodule Bonfire.Poll.Questions do
 
     to = if is_public, do: [Bonfire.Federate.ActivityPub.AdapterUtils.public_uri()], else: []
 
-    params = %{
-      pointer: question.id,
-      local: true,
-      actor: actor,
-      #  TODO: we should prob publish during proposal period too?
-      published: DatesTimes.to_iso8601(List.first(question.voting_dates || [])),
-      to: to,
-      additional: %{"cc" => cc || []},
-      object:
-        Map.merge(question_obj, %{
-          "to" => to,
-          "cc" => cc || [],
-          "interactionPolicy" => interaction_policy
-        })
-    }
+    params =
+      %{
+        pointer: question.id,
+        local: true,
+        actor: actor,
+        #  TODO: we should prob publish during proposal period too?
+        published: DatesTimes.to_iso8601(List.first(question.voting_dates || [])),
+        to: to,
+        additional: %{"cc" => cc || []},
+        object:
+          Map.merge(question_obj, %{
+            "to" => to,
+            "cc" => cc || [],
+            "interactionPolicy" => interaction_policy
+          })
+      }
+      |> debug("ap activity params")
 
     ap_create_or_update_activity(verb, params)
   end
 
   defp ap_create_or_update_activity(:update, params), do: ActivityPub.update(params)
-  defp ap_create_or_update_activity(_, params), do: ActivityPub.create(params)
+  defp ap_create_or_update_activity(_, params), do: ActivityPub.create_intransitive(params)
 
   @doc """
   Receives an incoming ActivityPub Question (poll) activity and creates/updates the local poll question.
@@ -321,10 +318,11 @@ defmodule Bonfire.Poll.Questions do
   - activity: the AP activity
   - object: the AP Question object
   """
-  def ap_receive_activity(creator, %{data: %{"type" => type}} = activity, object)
-      when type in ["Create", "Update"] do
-    question_data = object
-
+  def ap_receive_activity(
+        creator,
+        %{data: %{"type" => "Question"} = question_data} = activity,
+        _object
+      ) do
     options_key =
       cond do
         Map.has_key?(question_data, "oneOf") -> "oneOf"
@@ -346,49 +344,41 @@ defmodule Bonfire.Poll.Questions do
       end
 
     # Compose voting_dates: [start, end]
-    end_time = DatesTimes.parse_iso8601(question_data["endTime"])
-    closed_time = DatesTimes.parse_iso8601(question_data["closed"])
+    start_time = DatesTimes.to_date_time(question_data["published"])
 
-    start_time =
-      case end_time do
-        nil ->
-          DateTime.utc_now()
+    end_time =
+      if question_data["endTime"],
+        do:
+          DatesTimes.to_date_time(question_data["endTime"]) ||
+            DatesTimes.to_date_time(question_data["closed"])
 
-        _ ->
-          # If closed_time is present and before end_time, use closed_time as end
-          # Otherwise, infer start as now or leave nil
-          DateTime.utc_now()
-      end
-
-    voting_dates = Enum.filter([start_time, end_time], & &1)
-
-    attrs = %{
-      post_content: %{
-        name: question_data["name"],
-        summary: question_data["summary"],
-        html_body: question_data["content"]
-      },
-      voting_dates: voting_dates,
-      voting_format: if(options_key == "oneOf", do: "single", else: "multiple"),
-      voters_count: question_data["votersCount"],
-      choices: choices
-    }
+    attrs =
+      %{
+        post_content: %{
+          name: question_data["name"],
+          summary: question_data["summary"],
+          html_body: question_data["content"]
+        },
+        voting_dates: [start_time, end_time],
+        # proposal_dates: [], # TODO
+        voting_format: if(options_key == "oneOf", do: "single", else: "multiple"),
+        voters_count: question_data["votersCount"],
+        choices: choices
+      }
+      |> debug("incoming question attrs")
 
     # Use boundary/circle logic as in Posts
-    is_public = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity, object)
+    is_public = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity)
 
     direct_recipients =
-      Bonfire.Federate.ActivityPub.AdapterUtils.all_known_recipient_characters(
-        activity.data,
-        object
-      )
+      Bonfire.Federate.ActivityPub.AdapterUtils.all_known_recipient_characters(question_data)
 
     {boundary, to_circles} =
       Bonfire.Federate.ActivityPub.AdapterUtils.recipients_boundary_circles(
         direct_recipients,
         activity,
         is_public,
-        object["interactionPolicy"]
+        question_data["interactionPolicy"]
       )
 
     opts = [
@@ -398,32 +388,14 @@ defmodule Bonfire.Poll.Questions do
       question_attrs: attrs
     ]
 
-    # Create or update question
-    case type do
-      "Create" ->
-        create(opts)
+    # # Create or update question
+    # case type do
+    #   "Create" ->
+    create(opts)
 
-      # update(attrs[:id], attrs) # TODO
-      "Update" ->
-        nil
-    end
-  end
-
-  # For incoming votes (Create activities with Note objects)
-  def ap_receive_activity(creator, %{data: %{"type" => "Create"}} = activity, %{
-        "type" => "Note",
-        "name" => option_name,
-        "inReplyTo" => question_uri
-      }) do
-    # Find local question by URI
-    with {:ok, question} <- get_by_uri(question_uri),
-         {:ok, choice} <- find_choice_by_name(question, option_name) do
-      # Record vote
-      Bonfire.Poll.Votes.create(%{
-        user_id: creator.id,
-        question_id: question.id,
-        choice_id: choice.id
-      })
-    end
+    #   # update(attrs[:id], attrs) # TODO
+    #   "Update" ->
+    #     nil
+    # end
   end
 end

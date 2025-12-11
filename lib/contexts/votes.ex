@@ -1,11 +1,25 @@
 defmodule Bonfire.Poll.Votes do
   use Bonfire.Common.Utils
+  use Arrows
   import Bonfire.Poll
   alias Bonfire.Poll.{Questions, Question, Vote}
   alias Ecto.Changeset
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Objects
   alias Bonfire.Social.Feeds
+
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Vote
+  def query_module, do: __MODULE__
+
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
+  def federation_module,
+    do: [
+      "Answer",
+      {"Create", "Answer"},
+      {"Update", "Answer"}
+    ]
 
   # TODO: configurable
   def scores,
@@ -58,6 +72,18 @@ defmodule Bonfire.Poll.Votes do
     |> repo().many()
   end
 
+  def for_choice(choice, opts \\ []) when is_map(choice) or is_binary(choice) do
+    opts = to_options(opts)
+
+    opts
+    |> Keyword.put(:object, choice)
+    |> query(
+      opts
+      |> Keyword.put_new(:skip_boundary_check, true)
+    )
+    |> repo().many()
+  end
+
   def list(filters \\ [], opts \\ []),
     do:
       query(
@@ -79,9 +105,8 @@ defmodule Bonfire.Poll.Votes do
       case Map.get(poll, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format() do
         "weighted_multiple" ->
           # Get all votes for this choice and calculate weights
-          query([object: choice], opts)
-          |> repo().all()
-          |> calculate_total(poll)
+          for_choice([object: choice], opts)
+          ~> calculate_total(poll)
 
         _ ->
           # just count votes
@@ -167,13 +192,12 @@ defmodule Bonfire.Poll.Votes do
         {:error, "Only one choice allowed for single-choice polls"}
       else
         # multiple choice
-        with {:ok, votes} <-
+        with {:ok, votes} when is_list(votes) <-
                choices
                |> load_choices(voter, opts)
-               |> debug("loaded_choices")
+               |> debug("loaded_choices being voted on")
                |> Enum.map(&register_vote_choice(voter, question, &1, opts))
-               |> all_oks_or_error()
-               |> debug("oks"),
+               |> all_oks_or_error(),
              {:ok, vote_activity} <- send_vote_activity(voter, question, votes, opts) do
           {:ok, vote_activity}
         end
@@ -184,7 +208,7 @@ defmodule Bonfire.Poll.Votes do
   defp load_choices(choices_weights, voter, opts) do
     choices_weights =
       List.wrap(choices_weights)
-      |> flood("choices_weights")
+      |> debug("input_choices_weights")
       |> Enum.reduce(%{}, fn
         %{choice_id: cid, weight: w}, acc -> Map.put(acc, cid, w)
         %{choice_id: cid}, acc -> Map.put(acc, cid, 1)
@@ -400,5 +424,20 @@ defmodule Bonfire.Poll.Votes do
       {value, _, _, _} -> true
       _ -> false
     end)
+  end
+
+  # For incoming votes (Create activities with Note objects)
+  def ap_receive_activity(creator, %{data: %{"type" => "Create"}} = activity, %{
+        "type" => "Note",
+        "name" => option_name,
+        "inReplyTo" => question_uri
+      }) do
+    # Find local question by URI
+    with {:ok, question} <-
+           Questions.get_by_uri(question_uri, current_user: creator, verbs: [:vote]),
+         {:ok, choice} <- Choices.find_choice_by_name(question, option_name) do
+      # Record vote
+      vote(creator, question, choice, [])
+    end
   end
 end

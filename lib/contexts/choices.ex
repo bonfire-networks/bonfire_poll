@@ -25,7 +25,38 @@ defmodule Bonfire.Poll.Choices do
 
   def simple_create_and_put(index \\ nil, choices_or_choice_attrs, question_id, opts)
 
-  def simple_create_and_put(index, %{name: _} = attrs, question_id, opts) do
+  def simple_create_and_put(index, choices, question_id, opts) when is_list(choices) do
+    initial_index = index || 0
+
+    choices
+    |> Enum.with_index()
+    |> Enum.map(fn {choice, i} ->
+      do_simple_create_and_put(i + initial_index, choice, question_id, opts)
+    end)
+    |> all_oks_or_error()
+  end
+
+  def simple_create_and_put(index, %{} = choices, question_id, opts) do
+    if Enums.string_keys?(choices) do
+      initial_index = index || 0
+
+      choices
+      |> Enum.with_index()
+      |> Enum.map(fn {{i, choice}, fallback_i} ->
+        do_simple_create_and_put(
+          (Types.maybe_to_integer(i) || fallback_i) + initial_index,
+          choice,
+          question_id,
+          opts
+        )
+      end)
+      |> all_oks_or_error()
+    else
+      simple_create_and_put(index, [choices], question_id, opts)
+    end
+  end
+
+  defp do_simple_create_and_put(index, attrs, question_id, opts) do
     with cs <-
            Bonfire.Social.PostContents.cast(
              %Choice{},
@@ -34,28 +65,9 @@ defmodule Bonfire.Poll.Choices do
              opts[:boundary] || "public",
              opts
            ),
-         {:ok, %{id: choice_id} = _published} <- repo().insert(cs) do
-      put_choice(choice_id, question_id, index)
-
-      {:ok, choice_id}
-    end
-  end
-
-  def simple_create_and_put(nil, choices, question_id, opts) when is_list(choices) do
-    choices
-    |> Enum.with_index()
-    |> Enum.map(fn {choice, i} -> simple_create_and_put(i, choice, question_id, opts) end)
-  end
-
-  def simple_create_and_put(nil, %{} = choices, question_id, opts) do
-    if Enums.string_keys?(choices) do
-      choices
-      |> Enum.with_index()
-      |> Enum.map(fn {{i, choice}, fallback_i} ->
-        simple_create_and_put(Types.maybe_to_integer(i) || fallback_i, choice, question_id, opts)
-      end)
-    else
-      error(choices, "Invalid choices format")
+         {:ok, %{id: choice_id} = choice} <- repo().insert(cs),
+         {:ok, _} <- put_choice(choice_id, question_id, index) do
+      {:ok, choice}
     end
   end
 
@@ -116,6 +128,18 @@ defmodule Bonfire.Poll.Choices do
           {:ok, _} -> :ok
           {:error, reason} -> {:error, reason}
         end
+    end
+  end
+
+  def find_choice_by_name(question, name) do
+    question = repo().maybe_preload(question, :choices)
+
+    case Enum.find(question.choices, fn c ->
+           e(c, :post_content, :name, nil) || e(c, :post_content, :summary, nil) ||
+             e(c, :post_content, :html_body, nil) == name
+         end) do
+      nil -> {:error, :not_found}
+      choice -> {:ok, choice}
     end
   end
 end

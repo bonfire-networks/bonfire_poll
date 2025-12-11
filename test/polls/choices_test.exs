@@ -61,7 +61,7 @@ defmodule Bonfire.Poll.ChoicesTest do
         %{name: "Option 3"}
       ]
 
-      assert result =
+      assert {:ok, result} =
                Bonfire.Poll.Choices.simple_create_and_put(nil, choices_attrs, question,
                  current_user: user
                )
