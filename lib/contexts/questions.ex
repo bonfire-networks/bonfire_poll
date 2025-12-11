@@ -74,6 +74,7 @@ defmodule Bonfire.Poll.Questions do
       when is_binary(post_id) do
     query([id: post_id], opts_or_socket_or_current_user)
     |> Objects.read(opts_or_socket_or_current_user)
+    |> repo().maybe_preload(choices: [:post_content])
   end
 
   @doc "Returns true if voting is currently open for the poll."
@@ -144,7 +145,8 @@ defmodule Bonfire.Poll.Questions do
     # |> debug("filters")
     |> query_paginated(opts)
     |> Objects.list_paginated(opts)
-    |> debug()
+
+    # |> debug()
   end
 
   @doc "Query posts with pagination"
@@ -171,7 +173,9 @@ defmodule Bonfire.Poll.Questions do
 
   defp query_base do
     from(main_object in Question, as: :main_object)
-    |> proload([:post_content, choices: {"choice_", [:post_content]}])
+    |> proload([:post_content])
+
+    # , choices: {"choice_", [:post_content]}
   end
 
   defp find_choice_by_name(question, name) do

@@ -48,15 +48,19 @@ defmodule Bonfire.Poll.Choices do
   end
 
   def simple_create_and_put(nil, %{} = choices, question_id, opts) do
-    choices
-    |> Enum.with_index()
-    |> Enum.map(fn {{i, choice}, fallback_i} ->
-      simple_create_and_put(Types.maybe_to_integer(i) || fallback_i, choice, question_id, opts)
-    end)
+    if Enums.string_keys?(choices) do
+      choices
+      |> Enum.with_index()
+      |> Enum.map(fn {{i, choice}, fallback_i} ->
+        simple_create_and_put(Types.maybe_to_integer(i) || fallback_i, choice, question_id, opts)
+      end)
+    else
+      error(choices, "Invalid choices format")
+    end
   end
 
   def put_choice(choice, question, position \\ nil) do
-    with {:ok, %Ecto.Changeset{valid?: true} = cs} <-
+    with %Ecto.Changeset{valid?: true} = cs <-
            Bonfire.Data.Assort.Ranked.changeset(%{
              item_id: uid(choice),
              scope_id: uid(question),
@@ -66,18 +70,21 @@ defmodule Bonfire.Poll.Choices do
              name: :bonfire_data_ranked_unique_per_scope
            )
            # |> Ecto.Changeset.apply_action(:insert)
-           |> debug(),
+           |> debug("Ranked cs"),
          {:ok, ins} <- repo().insert(cs) do
       # TODO: federate
       {:ok, ins}
     else
       # poor man's upsert - TODO fix drag and drop ordering and make better and generic
       {:error, %Ecto.Changeset{} = cs} ->
+        warn(cs, "Ranked cs error")
         repo().upsert(cs, [:rank])
 
       # TODO: federate
 
       %Ecto.Changeset{} = cs ->
+        warn(cs, "Ranked cs error2")
+
         repo().upsert(cs, [:rank])
 
       # TODO: federate

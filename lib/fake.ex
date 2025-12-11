@@ -19,12 +19,12 @@ defmodule Bonfire.Poll.Fake do
     Bonfire.Poll.Questions.create(opts)
   end
 
-  def fake_choice(for_question, attrs \\ %{}) do
+  def fake_choice(for_question, attrs \\ %{}, opts \\ []) do
     Bonfire.Poll.Choices.simple_create_and_put(
-      nil,
+      opts[:index],
       Map.merge(fake_choice_attrs(), attrs),
       for_question,
-      []
+      opts
     )
   end
 

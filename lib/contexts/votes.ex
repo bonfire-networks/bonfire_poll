@@ -26,20 +26,45 @@ defmodule Bonfire.Poll.Votes do
     ]
 
   def get(subject, object, opts \\ []),
-    do: Edges.get(__MODULE__, subject, object, opts)
+    do:
+      Edges.get(
+        __MODULE__,
+        subject,
+        object,
+        opts
+        |> Keyword.put_new(:skip_boundary_check, true)
+      )
 
   def get!(subject, object, opts \\ []),
-    do: Edges.get!(__MODULE__, subject, object, opts)
-
-  def by_voter(subject, opts \\ []) when is_map(subject) or is_binary(subject),
     do:
-      (opts ++ [subject: subject])
-      |> query([current_user: subject] ++ List.wrap(opts))
-      |> repo().many()
+      Edges.get!(
+        __MODULE__,
+        subject,
+        object,
+        opts
+        |> Keyword.put_new(:skip_boundary_check, true)
+      )
+
+  def by_voter(subject, opts \\ []) when is_map(subject) or is_binary(subject) do
+    opts = to_options(opts)
+
+    opts
+    |> Keyword.put(:subject, subject)
+    |> query(
+      opts
+      |> Keyword.put_new(:current_user, subject)
+      |> Keyword.put_new(:skip_boundary_check, true)
+    )
+    |> repo().many()
+  end
 
   def list(filters \\ [], opts \\ []),
     do:
-      query(filters, List.wrap(opts))
+      query(
+        filters,
+        to_options(opts)
+        |> Keyword.put_new(:skip_boundary_check, true)
+      )
       |> repo().many()
 
   @doc """
@@ -113,14 +138,14 @@ defmodule Bonfire.Poll.Votes do
 
   def vote(%{} = voter, question, choices, opts) when is_binary(question) do
     with {:ok, question} <-
-           Bonfire.Common.Needles.get(
+           Bonfire.Poll.Questions.read(
              question,
              opts ++
                [
                  current_user: voter,
                  #  verbs: [:vote]
                  # FIXME: temp until we run fixtures with vote verb
-                 verbs: [:read]
+                 verbs: [:vote]
                ]
            ) do
       # debug(choice)
@@ -132,13 +157,6 @@ defmodule Bonfire.Poll.Votes do
   end
 
   def vote(voter, question, choices, opts) do
-    # Ensure question struct
-    question =
-      case question do
-        %{} -> question
-        id when is_binary(id) -> Bonfire.Poll.Questions.read(id, current_user: voter)
-      end
-
     if not Bonfire.Poll.Questions.voting_open?(question) do
       {:error, "Voting is not open for this poll"}
     else
@@ -182,10 +200,8 @@ defmodule Bonfire.Poll.Votes do
       opts ++
         [
           current_user: voter,
-          #  verbs: [:vote]
-          # FIXME: temp until we run fixtures with vote verb
+          #  verbs: [:vote], # TODO
           skip_boundary_check: true
-          #  verbs: [:read]
         ]
     )
     |> Objects.preload_creator()
