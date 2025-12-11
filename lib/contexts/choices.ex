@@ -68,18 +68,47 @@ defmodule Bonfire.Poll.Choices do
            # |> Ecto.Changeset.apply_action(:insert)
            |> debug(),
          {:ok, ins} <- repo().insert(cs) do
+      # TODO: federate
       {:ok, ins}
     else
       # poor man's upsert - TODO fix drag and drop ordering and make better and generic
       {:error, %Ecto.Changeset{} = cs} ->
         repo().upsert(cs, [:rank])
 
+      # TODO: federate
+
       %Ecto.Changeset{} = cs ->
         repo().upsert(cs, [:rank])
+
+      # TODO: federate
 
       e ->
         error(e)
     end
     |> debug()
+  end
+
+  @doc """
+  Removes the association between a choice and a question.
+  Deletes the Ranked record linking the choice to the question.
+  Returns :ok if deleted, {:error, reason} otherwise.
+  """
+  def remove_choice(choice_id, question_id) do
+    repo = repo()
+
+    assoc =
+      repo.get_by(Bonfire.Data.Assort.Ranked, item_id: uid(choice_id), scope_id: uid(question_id))
+
+    case assoc do
+      nil ->
+        {:error, :not_found}
+
+      _ ->
+        case repo.delete(assoc) do
+          # TODO: federate
+          {:ok, _} -> :ok
+          {:error, reason} -> {:error, reason}
+        end
+    end
   end
 end

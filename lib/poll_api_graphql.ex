@@ -32,7 +32,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :proposals_close_at, :datetime do
         resolve(fn poll, _, _ ->
-          {:ok, poll.proposal_dates |> List.last()}
+          {:ok, poll.proposal_dates |> Questions.end_date()}
         end)
       end
 
@@ -44,7 +44,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :voting_close_at, :datetime do
         resolve(fn poll, _, _ ->
-          {:ok, poll.voting_dates |> List.last()}
+          {:ok, poll.voting_dates |> Questions.end_date()}
         end)
       end
 
@@ -67,7 +67,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           votes =
             poll.choices
             |> Enum.flat_map(fn choice ->
-              # TODO: avoid N+1 and avoid loading data if we only need a count?
+              # TODO: avoid N+1 and avoid loading full data if we only need a count?
               Bonfire.Poll.Votes.query([object: choice], []) |> Bonfire.Poll.Votes.repo().all()
             end)
 
@@ -121,10 +121,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:id, :id)
       field(:post_content, :post_content)
 
-      field(:votes_count, :integer) do
-        resolve(fn choice, _, _ ->
-          # TODO: avoid N+1
-          {:ok, Bonfire.Poll.Votes.count(choice, [])}
+      field(:votes_result_total, :integer) do
+        resolve(fn choice, _, %{source: poll, context: %{current_user: user}} ->
+          {:ok, Bonfire.Poll.Votes.calculate_if_visible(choice, poll, current_user: user)}
+        end)
+      end
+
+      field(:votes_result_average, :integer) do
+        resolve(fn choice, _, %{source: poll, context: %{current_user: user}} ->
+          {:ok, Bonfire.Poll.Votes.calculate_if_visible(choice, poll, current_user: user)}
         end)
       end
     end
@@ -243,8 +248,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                  question,
                  votes
                  |> Enum.map(fn
-                   %{choice_id: choice_id, weight: weight} ->
-                     {choice_id, weight}
+                   %{choice_id: choice_id, weight: weight} = map ->
+                     map
+
+                   %{choice_id: choice_id} = map ->
+                     Map.put(map, :weight, 1)
 
                    other ->
                      error(other, "invalid input")

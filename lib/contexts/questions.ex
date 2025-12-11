@@ -9,12 +9,27 @@ defmodule Bonfire.Poll.Questions do
   alias Bonfire.Epics.Epic
   alias Bonfire.Social.Objects
 
+  @behaviour Bonfire.Common.QueryModule
+  @behaviour Bonfire.Common.ContextModule
+  def schema_module, do: Question
+  def query_module, do: __MODULE__
+
+  @behaviour Bonfire.Federate.ActivityPub.FederationModules
+  def federation_module,
+    do: [
+      "Question",
+      "Answer",
+      {"Create", "Question"},
+      {"Update", "Question"}
+    ]
+
   def default_voting_format, do: Config.get([:bonfire_poll, :default_voting_format], "single")
 
   def create(options \\ []) do
     # TODO: sanitise HTML to a certain extent depending on is_admin and/or boundaries
 
     with {:ok, question} <- run_epic(:create, options ++ [do_not_strip_html: true]) do
+      #  TODO: add in an Epic instead?
       Choices.simple_create_and_put(options[:question_attrs][:choices] || [], question, options)
       |> debug("choices added")
 
@@ -25,7 +40,7 @@ defmodule Bonfire.Poll.Questions do
     end
   end
 
-  def run_epic(type, options, module \\ __MODULE__, on \\ :question) do
+  defp run_epic(type, options, module \\ __MODULE__, on \\ :question) do
     Bonfire.Epics.run_epic(module, type, Keyword.put(options, :on, on))
   end
 
@@ -60,6 +75,57 @@ defmodule Bonfire.Poll.Questions do
     query([id: post_id], opts_or_socket_or_current_user)
     |> Objects.read(opts_or_socket_or_current_user)
   end
+
+  @doc "Returns true if voting is currently open for the poll."
+  def voting_open?(%Question{voting_dates: voting_dates}) do
+    now = DateTime.utc_now()
+
+    case voting_dates do
+      [start, end_dt] when not is_nil(start) and not is_nil(end_dt) ->
+        DateTime.compare(now, start) != :lt and DateTime.compare(now, end_dt) == :lt
+
+      [start | _] when not is_nil(start) ->
+        DateTime.compare(now, start) != :lt
+
+      _ ->
+        false
+    end
+  end
+
+  @doc "Returns true if voting has ended for the poll."
+  def voting_ended?(%Question{voting_dates: voting_dates}) do
+    case end_date(voting_dates) do
+      nil -> false
+      end_dt -> DateTime.compare(DateTime.utc_now(), end_dt) == :gt
+    end
+  end
+
+  @doc "Returns true if proposal period is currently open for the poll."
+  def proposal_open?(%Question{proposal_dates: proposal_dates}) do
+    now = DateTime.utc_now()
+
+    case proposal_dates do
+      [start, end_dt] when not is_nil(start) and not is_nil(end_dt) ->
+        DateTime.compare(now, start) != :lt and DateTime.compare(now, end_dt) == :lt
+
+      [start | _] when not is_nil(start) ->
+        DateTime.compare(now, start) != :lt
+
+      _ ->
+        false
+    end
+  end
+
+  @doc "Returns true if proposal period has ended for the poll."
+  def proposal_ended?(%Question{proposal_dates: proposal_dates}) do
+    case end_date(proposal_dates) do
+      nil -> false
+      end_dt -> DateTime.compare(DateTime.utc_now(), end_dt) == :gt
+    end
+  end
+
+  def end_date([_start, end_date]), do: end_date
+  def end_date(_), do: nil
 
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts \\ []) do
@@ -106,5 +172,254 @@ defmodule Bonfire.Poll.Questions do
   defp query_base do
     from(main_object in Question, as: :main_object)
     |> proload([:post_content, choices: {"choice_", [:post_content]}])
+  end
+
+  defp find_choice_by_name(question, name) do
+    question = repo().maybe_preload(question, :choices)
+
+    case Enum.find(question.choices, fn c ->
+           e(c, :post_content, :name, nil) || e(c, :post_content, :summary, nil) ||
+             e(c, :post_content, :html_body, nil) == name
+         end) do
+      nil -> {:error, :not_found}
+      choice -> {:ok, choice}
+    end
+  end
+
+  defp get_by_uri(uri) do
+    # TODO: Find question by canonical URL
+    case repo().get_by(schema_module(), canonical_url: uri) do
+      nil -> {:error, :not_found}
+      question -> {:ok, question}
+    end
+  end
+
+  @doc """
+  Serializes a poll question as an ActivityStreams Question object and wraps in a Create/Update activity for federation.
+
+  ## Parameters
+  - subject: who is performing the action
+  - verb: :create or :update
+  - question: poll question struct
+  """
+  def ap_publish_activity(subject, verb, question) do
+    {:ok, actor} = ActivityPub.Actor.get_cached(pointer: subject)
+
+    # Preload choices and votes
+    question = repo().maybe_preload(question, choices: [:votes])
+    choices = question.choices || []
+
+    # Determine voting format and options key
+    options_key =
+      case question.voting_format || default_voting_format() do
+        "single" -> "oneOf"
+        "multiple" -> "anyOf"
+        "weighted_multiple" -> "anyOf"
+      end
+
+    # Build choices array
+    options =
+      Enum.map(choices, fn choice ->
+        votes = choice.votes || []
+        # FIXME: should we instead do a weighted count if necessary?
+        vote_count = Enum.count(votes, fn v -> v.choice_id == choice.id end)
+
+        name = e(choice, :post_content, :name, nil)
+        summary = e(choice, :post_content, :summary, nil)
+        content = e(choice, :post_content, :html_body, nil)
+
+        %{
+          "type" => "Note",
+          "name" => name || summary || content,
+          "summary" => if(name, do: summary),
+          "content" => if(name || summary, do: content),
+          "replies" => %{
+            "type" => "Collection",
+            "totalItems" => vote_count
+          }
+        }
+      end)
+
+    # Distinct voters count
+    # voters_count = votes |> Enum.map(& &1.user_id) |> Enum.uniq() |> length()
+
+    # TODO
+    cc = []
+
+    # Use PostContents.ap_prepare_object_note for main content
+    main_obj =
+      Bonfire.Social.PostContents.ap_prepare_object_note(
+        actor,
+        verb,
+        question,
+        actor,
+        # TODO: mentions (empty for now)
+        [],
+        # TODO: context
+        nil,
+        # TODO: reply_to
+        nil
+      )
+
+    # Compose Question object, merging main_obj and poll-specific fields
+    question_obj =
+      main_obj
+      |> Map.merge(%{
+        "type" => "Question",
+        "id" => URIs.canonical_url(question),
+        "endTime" => DatesTimes.to_iso8601(end_date(question.voting_dates || [])),
+        "closed" =>
+          if(voting_ended?(question),
+            do: DatesTimes.to_iso8601(end_date(question.voting_dates || []))
+          ),
+        # "votersCount" => voters_count, # TODO!
+        options_key => options
+      })
+
+    # Boundary/circle logic (reuse from Posts)
+    is_public = Bonfire.Boundaries.object_public?(question)
+
+    interaction_policy =
+      Bonfire.Federate.ActivityPub.AdapterUtils.ap_prepare_outgoing_interaction_policy(
+        actor,
+        question
+      )
+
+    to = if is_public, do: [Bonfire.Federate.ActivityPub.AdapterUtils.public_uri()], else: []
+
+    params = %{
+      pointer: question.id,
+      local: true,
+      actor: actor,
+      #  TODO: we should prob publish during proposal period too?
+      published: DatesTimes.to_iso8601(List.first(question.voting_dates || [])),
+      to: to,
+      additional: %{"cc" => cc || []},
+      object:
+        Map.merge(question_obj, %{
+          "to" => to,
+          "cc" => cc || [],
+          "interactionPolicy" => interaction_policy
+        })
+    }
+
+    ap_create_or_update_activity(verb, params)
+  end
+
+  defp ap_create_or_update_activity(:update, params), do: ActivityPub.update(params)
+  defp ap_create_or_update_activity(_, params), do: ActivityPub.create(params)
+
+  @doc """
+  Receives an incoming ActivityPub Question (poll) activity and creates/updates the local poll question.
+
+  ## Parameters
+  - creator: the actor creating/updating the poll
+  - activity: the AP activity
+  - object: the AP Question object
+  """
+  def ap_receive_activity(creator, %{data: %{"type" => type}} = activity, object)
+      when type in ["Create", "Update"] do
+    question_data = object
+
+    options_key =
+      cond do
+        Map.has_key?(question_data, "oneOf") -> "oneOf"
+        Map.has_key?(question_data, "anyOf") -> "anyOf"
+        true -> nil
+      end
+
+    # Map ActivityPub fields to Bonfire schema fields
+    choices =
+      if options_key do
+        Enum.map(question_data[options_key], fn opt ->
+          %{
+            post_content: %{name: opt["name"], summary: opt["summary"], html_body: opt["content"]},
+            vote_count: opt["replies"]["totalItems"]
+          }
+        end)
+      else
+        []
+      end
+
+    # Compose voting_dates: [start, end]
+    end_time = DatesTimes.parse_iso8601(question_data["endTime"])
+    closed_time = DatesTimes.parse_iso8601(question_data["closed"])
+
+    start_time =
+      case end_time do
+        nil ->
+          DateTime.utc_now()
+
+        _ ->
+          # If closed_time is present and before end_time, use closed_time as end
+          # Otherwise, infer start as now or leave nil
+          DateTime.utc_now()
+      end
+
+    voting_dates = Enum.filter([start_time, end_time], & &1)
+
+    attrs = %{
+      post_content: %{
+        name: question_data["name"],
+        summary: question_data["summary"],
+        html_body: question_data["content"]
+      },
+      voting_dates: voting_dates,
+      voting_format: if(options_key == "oneOf", do: "single", else: "multiple"),
+      voters_count: question_data["votersCount"],
+      choices: choices
+    }
+
+    # Use boundary/circle logic as in Posts
+    is_public = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity, object)
+
+    direct_recipients =
+      Bonfire.Federate.ActivityPub.AdapterUtils.all_known_recipient_characters(
+        activity.data,
+        object
+      )
+
+    {boundary, to_circles} =
+      Bonfire.Federate.ActivityPub.AdapterUtils.recipients_boundary_circles(
+        direct_recipients,
+        activity,
+        is_public,
+        object["interactionPolicy"]
+      )
+
+    opts = [
+      current_user: creator,
+      to_circles: to_circles,
+      boundary: boundary,
+      question_attrs: attrs
+    ]
+
+    # Create or update question
+    case type do
+      "Create" ->
+        create(opts)
+
+      # update(attrs[:id], attrs) # TODO
+      "Update" ->
+        nil
+    end
+  end
+
+  # For incoming votes (Create activities with Note objects)
+  def ap_receive_activity(creator, %{data: %{"type" => "Create"}} = activity, %{
+        "type" => "Note",
+        "name" => option_name,
+        "inReplyTo" => question_uri
+      }) do
+    # Find local question by URI
+    with {:ok, question} <- get_by_uri(question_uri),
+         {:ok, choice} <- find_choice_by_name(question, option_name) do
+      # Record vote
+      Bonfire.Poll.Votes.create(%{
+        user_id: creator.id,
+        question_id: question.id,
+        choice_id: choice.id
+      })
+    end
   end
 end

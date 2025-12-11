@@ -1,6 +1,6 @@
 defmodule Bonfire.Poll.Acts.Choices.Upsert do
   @moduledoc """
-  Creates a changeset for publishing choice(s) for a question
+  WIP: Creates a changeset for publishing choice(s) for a question
 
   Epic Options:
     * `:current_user` - user that will create the choice, required.

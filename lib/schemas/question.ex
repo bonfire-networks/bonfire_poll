@@ -5,6 +5,7 @@ defmodule Bonfire.Poll.Question do
     source: "bonfire_poll_question"
 
   import Ecto.Changeset
+  use Bonfire.Common.Config
 
   pointable_schema do
     # field :name, :string
