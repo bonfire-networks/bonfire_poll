@@ -5,14 +5,13 @@
 <div class="proposal-list">
   <div
     class="proposal card outline outline-1 shadow-xl py-2 px-4 my-4"
-    style={if @voting_format == "weighted_multiple",
-      do:
+    style={
         "outline-color: oklch(var(--#{cond do
           is_number(@selected) and @selected > 0 -> "su"
           @selected < 0 -> "wa"
           @selected == "∞" -> "er"
           true -> "n"
-        end}));"}
+        end}));": @voting_format == "weighted_multiple"}
   >
     <div class="flex justify-between">
       {#case @voting_format}
