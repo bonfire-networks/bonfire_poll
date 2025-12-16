@@ -323,6 +323,61 @@ defmodule Bonfire.Poll.Questions do
         %{data: %{"type" => "Question"} = question_data} = activity,
         _object
       ) do
+    attrs = ap_question_attrs(question_data)
+    opts = ap_receive_opts(creator, activity, question_data, attrs)
+
+    create(opts)
+  end
+
+  def ap_receive_activity(
+        creator,
+        %{data: %{"type" => type} = activity_data} = activity,
+        question_data
+      )
+      when type in ["Create", "Update"] do
+    attrs = ap_question_attrs(question_data)
+    opts = ap_receive_opts(creator, activity, question_data, attrs)
+
+    case type do
+      "Create" ->
+        create(opts)
+
+      "Update" ->
+        with {:ok, question} <- get_by_uri(question_data["id"], current_user: creator),
+             # TODO: also update circles/boundaries if changed?
+             {:ok, question} <-
+               update_question_and_choices(creator, question, opts[:question_attrs]) do
+          {:ok, question}
+        end
+    end
+  end
+
+  def update_question_and_choices(creator, %Question{} = question, attrs) do
+    with {:ok, question} <- update_question(creator, question, Map.delete(attrs, :choices)),
+         {:ok, question} <- update_choices(creator, question, attrs[:choices]) do
+      {:ok, question}
+    end
+  end
+
+  def update_choices(creator, %Question{} = question, choices) do
+    with {:ok, _} <-
+           Bonfire.Poll.Choices.simple_create_and_put(nil, choices || [], poll,
+             current_user: creator
+           ) do
+      # TODO: reload question with updated choices, or add them to the existing struct?
+      {:ok, question}
+    end
+  end
+
+  def update_question(_creator, %Question{} = question, attrs) do
+    # TODO: check permission?
+    question
+    |> changeset(attrs)
+    |> repo().update()
+  end
+
+  # Shared logic for mapping AP Question data to local attrs
+  defp ap_question_attrs(question_data) do
     options_key =
       cond do
         Map.has_key?(question_data, "oneOf") -> "oneOf"
@@ -352,22 +407,21 @@ defmodule Bonfire.Poll.Questions do
           DatesTimes.to_date_time(question_data["endTime"]) ||
             DatesTimes.to_date_time(question_data["closed"])
 
-    attrs =
-      %{
-        post_content: %{
-          name: question_data["name"],
-          summary: question_data["summary"],
-          html_body: question_data["content"]
-        },
-        voting_dates: [start_time, end_time],
-        # proposal_dates: [], # TODO
-        voting_format: if(options_key == "oneOf", do: "single", else: "multiple"),
-        voters_count: question_data["votersCount"],
-        choices: choices
-      }
-      |> debug("incoming question attrs")
+    %{
+      post_content: %{
+        name: question_data["name"],
+        summary: question_data["summary"],
+        html_body: question_data["content"]
+      },
+      voting_dates: [start_time, end_time],
+      voting_format: if(options_key == "oneOf", do: "single", else: "multiple"),
+      voters_count: question_data["votersCount"],
+      choices: choices
+    }
+  end
 
-    # Use boundary/circle logic as in Posts
+  # Shared logic for boundary/circle/recipients extraction
+  defp ap_receive_opts(creator, activity, question_data, attrs) do
     is_public = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity)
 
     direct_recipients =
@@ -381,21 +435,11 @@ defmodule Bonfire.Poll.Questions do
         question_data["interactionPolicy"]
       )
 
-    opts = [
+    [
       current_user: creator,
       to_circles: to_circles,
       boundary: boundary,
       question_attrs: attrs
     ]
-
-    # # Create or update question
-    # case type do
-    #   "Create" ->
-    create(opts)
-
-    #   # update(attrs[:id], attrs) # TODO
-    #   "Update" ->
-    #     nil
-    # end
   end
 end
