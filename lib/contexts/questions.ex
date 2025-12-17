@@ -369,7 +369,7 @@ defmodule Bonfire.Poll.Questions do
 
   def update_choices(creator, %Question{} = question, choices) do
     with {:ok, _} <-
-           Bonfire.Poll.Choices.simple_create_and_put(nil, choices || [], poll,
+           Bonfire.Poll.Choices.simple_create_and_put(nil, choices || [], question,
              current_user: creator
            ) do
       # TODO: reload question with updated choices, or add them to the existing struct?
