@@ -181,7 +181,7 @@ defmodule Bonfire.Poll.Questions do
     # WIP: Find question by canonical URL
     Bonfire.Federate.ActivityPub.Peered.get_by_uri(uri)
     ~> Enums.id()
-    |> read(opts)
+    ~> read(opts)
   end
 
   @doc """
