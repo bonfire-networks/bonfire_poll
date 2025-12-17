@@ -427,17 +427,40 @@ defmodule Bonfire.Poll.Votes do
   end
 
   # For incoming votes (Create activities with Note objects)
-  def ap_receive_activity(creator, %{data: %{"type" => "Create"}} = activity, %{
-        "type" => "Note",
-        "name" => option_name,
-        "inReplyTo" => question_uri
-      }) do
+  def ap_receive_activity(
+        creator,
+        %{data: %{"type" => "Create"}} = activity,
+        %{
+          data: %{
+            "type" => type,
+            "name" => option_name,
+            "inReplyTo" => question_uri
+          }
+        } = ap_object
+      )
+      when is_binary(option_name) and type in ["Answer", "Note"] do
     # Find local question by URI
     with {:ok, question} <-
            Questions.get_by_uri(question_uri, current_user: creator, verbs: [:vote]),
          {:ok, choice} <- Choices.find_choice_by_name(question, option_name) do
       # Record vote
       vote(creator, question, choice, [])
+    else
+      e ->
+        warn(
+          e,
+          "Could not process incoming reply as a vote, falling back to normal reply handling"
+        )
+
+        maybe_apply(Bonfire.Posts, :ap_receive_activity, [creator, activity, ap_object])
     end
+  end
+
+  def ap_receive_activity(
+        creator,
+        activity,
+        %{"id" => _} = ap_object
+      ) do
+    ap_receive_activity(creator, activity, %{data: ap_object})
   end
 end
