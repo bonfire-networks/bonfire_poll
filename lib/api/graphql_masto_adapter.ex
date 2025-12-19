@@ -122,12 +122,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     end
 
     defp parse_index(idx) when is_integer(idx), do: idx
+
     defp parse_index(idx) when is_binary(idx) do
       case Integer.parse(idx) do
         {int, ""} -> int
         _ -> nil
       end
     end
+
     defp parse_index(_), do: nil
   end
 end
