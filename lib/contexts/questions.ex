@@ -181,7 +181,7 @@ defmodule Bonfire.Poll.Questions do
     # WIP: Find question by canonical URL
     Bonfire.Federate.ActivityPub.Peered.get_by_uri(uri)
     ~> Enums.id()
-    |> read(opts)
+    ~> read(opts)
   end
 
   @doc """
@@ -332,7 +332,7 @@ defmodule Bonfire.Poll.Questions do
   def ap_receive_activity(
         creator,
         %{data: %{"type" => type} = activity_data} = activity,
-        question_data
+        %{"id" => ap_id} = question_data
       )
       when type in ["Create", "Update"] do
     attrs = ap_question_attrs(question_data)
@@ -343,13 +343,21 @@ defmodule Bonfire.Poll.Questions do
         create(opts)
 
       "Update" ->
-        with {:ok, question} <- get_by_uri(question_data["id"], current_user: creator),
+        with {:ok, question} <- get_by_uri(ap_id, current_user: creator),
              # TODO: also update circles/boundaries if changed?
              {:ok, question} <-
                update_question_and_choices(creator, question, opts[:question_attrs]) do
           {:ok, question}
         end
     end
+  end
+
+  def ap_receive_activity(
+        creator,
+        activity,
+        %{data: question_data}
+      ) do
+    ap_receive_activity(creator, activity, question_data)
   end
 
   def update_question_and_choices(creator, %Question{} = question, attrs) do
