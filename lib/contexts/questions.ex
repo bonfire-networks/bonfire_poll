@@ -43,7 +43,12 @@ defmodule Bonfire.Poll.Questions do
     Bonfire.Epics.run_epic(module, type, Keyword.put(options, :on, on))
   end
 
-  def changeset(question \\ %Bonfire.Poll.Question{}, attrs) do
+  def changeset(question \\ %Bonfire.Poll.Question{}, attrs, opts) do
+    base_changeset(question, attrs)
+    |> Bonfire.Social.PostContents.cast(attrs, current_user(opts), opts[:boundary], opts)
+  end
+
+  def base_changeset(question \\ %Bonfire.Poll.Question{}, attrs) do
     # Ensure voting_format is present in question_attrs or set to default
     attrs =
       attrs
@@ -52,21 +57,21 @@ defmodule Bonfire.Poll.Questions do
     Question.changeset(question, attrs)
   end
 
-  def create_simple(%Question{} = question) do
+  def create_simple(%Question{} = question, opts) do
     question
-    |> changeset()
-    |> create_simple()
+    |> changeset(question, opts)
+    |> create_simple(opts)
   end
 
-  def create_simple(%Ecto.Changeset{} = changeset) do
+  def create_simple(%Ecto.Changeset{} = changeset, _opts) do
     changeset
     |> repo().insert()
   end
 
-  def create_simple(%{} = attrs) do
+  def create_simple(%{} = attrs, opts) do
     attrs
-    |> changeset()
-    |> create_simple()
+    |> changeset(attrs, opts)
+    |> create_simple(opts)
   end
 
   def read(post_id, opts_or_socket_or_current_user \\ [])
@@ -175,6 +180,34 @@ defmodule Bonfire.Poll.Questions do
     |> proload([:post_content])
 
     # , choices: {"choice_", [:post_content]}
+  end
+
+  def replace_choices(creator, %Question{} = question, choices) do
+    # First remove existing choices
+    # TODO: optimise
+    Enum.each(question.choices || [], fn choice ->
+      Choices.remove_choice(choice.id, question.id)
+    end)
+
+    # Then add new choices
+    update_choices(creator, question, choices)
+  end
+
+  def update_choices(creator, %Question{} = question, choices) do
+    with {:ok, _} <-
+           Bonfire.Poll.Choices.simple_create_and_put(nil, choices || [], question,
+             current_user: creator
+           ) do
+      # TODO: reload question with updated choices, or add them to the existing struct?
+      {:ok, question}
+    end
+  end
+
+  def update_question(creator, %Question{} = question, attrs, opts) do
+    # TODO: check permission?
+    question
+    |> changeset(attrs, opts |> Keyword.put_new(:current_user, creator))
+    |> repo().update()
   end
 
   def get_by_uri(uri, opts \\ []) do
@@ -336,17 +369,22 @@ defmodule Bonfire.Poll.Questions do
       )
       when type in ["Create", "Update"] do
     attrs = ap_question_attrs(question_data)
-    opts = ap_receive_opts(creator, activity, question_data, attrs)
+
+    opts =
+      ap_receive_opts(creator, activity, question_data, attrs)
+      |> debug("ap receive opts")
 
     case type do
       "Create" ->
         create(opts)
 
       "Update" ->
-        with {:ok, question} <- get_by_uri(ap_id, current_user: creator),
+        with {:ok, question} <-
+               get_by_uri(ap_id, current_user: creator) |> debug("find question to update"),
              # TODO: also update circles/boundaries if changed?
              {:ok, question} <-
-               update_question_and_choices(creator, question, opts[:question_attrs]) do
+               update_question_and_choices(creator, question, opts)
+               |> debug("question & choices updated") do
           {:ok, question}
         end
     end
@@ -360,28 +398,15 @@ defmodule Bonfire.Poll.Questions do
     ap_receive_activity(creator, activity, question_data)
   end
 
-  def update_question_and_choices(creator, %Question{} = question, attrs) do
-    with {:ok, question} <- update_question(creator, question, Map.delete(attrs, :choices)),
-         {:ok, question} <- update_choices(creator, question, attrs[:choices]) do
+  def update_question_and_choices(creator, %Question{} = question, opts) do
+    attrs = opts[:question_attrs] || %{}
+
+    with {:ok, question} <-
+           update_question(creator, question, Map.delete(attrs, :choices), opts)
+           |> debug("question updated"),
+         {:ok, question} <- replace_choices(creator, question, attrs[:choices]) do
       {:ok, question}
     end
-  end
-
-  def update_choices(creator, %Question{} = question, choices) do
-    with {:ok, _} <-
-           Bonfire.Poll.Choices.simple_create_and_put(nil, choices || [], question,
-             current_user: creator
-           ) do
-      # TODO: reload question with updated choices, or add them to the existing struct?
-      {:ok, question}
-    end
-  end
-
-  def update_question(_creator, %Question{} = question, attrs) do
-    # TODO: check permission?
-    question
-    |> changeset(attrs)
-    |> repo().update()
   end
 
   # Shared logic for mapping AP Question data to local attrs

@@ -70,7 +70,7 @@ defmodule Bonfire.Poll.Question.Create do
         # maybe_debug(epic, act, attrs, "Post attrs")
         if attrs == %{}, do: maybe_debug(act, attrs, "empty attrs")
 
-        Questions.changeset(attrs)
+        Questions.base_changeset(attrs)
         |> Map.put(:action, :insert)
         # |> maybe_overwrite_id(id)
         |> Epic.assign(epic, as, ...)
