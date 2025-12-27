@@ -4,7 +4,7 @@
     </span> --}
 <div class="proposal-list">
   <div
-    class="proposal card outline outline-1 shadow-xl py-2 px-4 my-4"
+    class="p-3"
     style={
         "outline-color: oklch(var(--#{cond do
           is_number(@selected) and @selected > 0 -> "su"
@@ -42,12 +42,12 @@
           {/for}
         {#match "multiple"}
           <label class="flex items-center gap-2">
-            <input type="checkbox" name={"vote[#{id(@choice)}]"} value="1" checked={!!@selected}>
+            <input type="checkbox" name={"vote[#{id(@choice)}]"} value="1" checked={!!@selected} class="checkbox-sm checkbox checkbox-primary">
             <#slot />
           </label>
         {#match "single"}
           <label class="flex items-center gap-2">
-            <input type="radio" name={"vote[#{id(@choice)}]"} value="1" checked={!!@selected}>
+            <input type="radio" name="vote" value={id(@choice)} checked={@selected == 1 or @selected == true} class="radio-sm radio radio-primary">
             <#slot />
           </label>
         {#match _}

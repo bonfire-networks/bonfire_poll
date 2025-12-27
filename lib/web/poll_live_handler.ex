@@ -225,21 +225,28 @@ defmodule Bonfire.Poll.LiveHandler do
 
   def handle_event("submit_vote", %{"question_id" => question, "vote" => votes}, socket) do
     # Ensure votes is a list of maps %{choice_id: ..., weight: ...}
+    # Handle single format where votes is just a choice_id string
     votes =
-      votes
-      |> Enum.map(fn
-        {choice_id, weight} when is_binary(choice_id) ->
-          %{choice_id: choice_id, weight: weight}
-
-        map = %{"choice_id" => choice_id, "weight" => weight} ->
-          %{choice_id: choice_id, weight: weight}
-
-        map = %{"choice_id" => choice_id} ->
-          %{choice_id: choice_id, weight: 1}
-
+      case votes do
         choice_id when is_binary(choice_id) ->
-          %{choice_id: choice_id, weight: 1}
-      end)
+          [%{choice_id: choice_id, weight: 1}]
+
+        votes when is_map(votes) ->
+          votes
+          |> Enum.map(fn
+            {choice_id, weight} when is_binary(choice_id) ->
+              %{choice_id: choice_id, weight: weight}
+
+            map = %{"choice_id" => choice_id, "weight" => weight} ->
+              %{choice_id: choice_id, weight: weight}
+
+            map = %{"choice_id" => choice_id} ->
+              %{choice_id: choice_id, weight: 1}
+
+            choice_id when is_binary(choice_id) ->
+              %{choice_id: choice_id, weight: 1}
+          end)
+      end
 
     with {:ok, _result} <- Bonfire.Poll.Votes.vote(current_user(socket), question, votes) do
       {:noreply,

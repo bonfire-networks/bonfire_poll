@@ -3,7 +3,7 @@
   x-data="{expanded: false, expandable: $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight}"
   data-rendered={@showing_within}
   data-main-object={@viewing_main_object}
-  class="mt-2 bg-base-200 rounded"
+  class=""
   x-transition
   x-ref="choice_container"
 >
@@ -26,7 +26,7 @@
   {#case e(@object, :object_voted, nil)}
     {#match nil}
       {#if @vote}
-        <Bonfire.Poll.VotingLive voting_format={@voting_format} choice={@object} selected={false}>
+        <Bonfire.Poll.VotingLive voting_format={@voting_format} question={@question} choice={@object} selected={false}>
           {#if @voting_format != "weighted_multiple"}
             <Bonfire.Poll.Web.Preview.ChoiceContentLive
               question={@question}
@@ -44,6 +44,7 @@
     {#match votes}
       <Bonfire.Poll.VotingLive
         voting_format={@voting_format}
+        question={@question}
         choice={@object}
         selected={Bonfire.Poll.Votes.calculate_total(votes, @question)
         |> debug("calculate_total")
@@ -65,4 +66,20 @@
         {/if}
       </Bonfire.Poll.VotingLive>
   {/case}
+
+  {!-- Vote stats progress bar (shown when showResults is true) --}
+  {#if @vote and @voting_format != "weighted_multiple"}
+    <div x-show="showResults" x-cloak class="px-3 pb-2">
+      <div class="flex items-center gap-2">
+        <progress
+          class="progress progress-primary flex-1 h-2"
+          value={if @total_votes > 0, do: round(@vote_count * 100 / @total_votes), else: 0}
+          max="100"
+        />
+        <span class="text-xs text-base-content/70 min-w-[80px] text-right">
+          {if @total_votes > 0, do: round(@vote_count * 100 / @total_votes), else: 0}% ({@vote_count})
+        </span>
+      </div>
+    </div>
+  {/if}
 </div>

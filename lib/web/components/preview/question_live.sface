@@ -119,7 +119,13 @@
       {#elseif e(@object, :voting_dates, nil) != false}
         <!-- <Bonfire.Poll.QuestionTimeLabelLive phase="voting" dates={e(@object, :voting_dates, [])} /> -->
 
-        <form phx-submit="Bonfire.Poll:submit_vote" phx-target={@activity_component_id}>
+        <form
+          class="border border-base-content/20 rounded-box"
+          phx-submit="Bonfire.Poll:submit_vote"
+          phx-target={@activity_component_id}
+          x-data="{ hasSelection: false, showResults: false }"
+          x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
+        >
           {#for choice <- e(@object, :choices, [])}
             <Bonfire.Poll.Web.Preview.ChoiceLive
               question={Map.drop(@object, [:choices])}
@@ -129,15 +135,25 @@
               is_remote={@is_remote}
               hide_actions={@hide_actions}
               voting_format={e(@object, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format()}
+              vote_count={choice_vote_count(choice)}
+              total_votes={total_votes(e(@object, :choices, []))}
               vote
             />
           {/for}
-          <div class="text-center flex items-center">
+          <div class="flex items-center gap-3 m-3 mt-2">
             <input type="hidden" name="question_id" value={id(@object)}>
-            <button id="submit-vote" class="flex btn btn-primary p-2">
-              <#Icon iconify="material-symbols:how-to-vote" class="w-5 h-5" />
-              <span>{l("Submit Vote")}</span>
+            <button id="submit-vote" class="btn btn-primary btn-sm" x-bind:disabled="!hasSelection">
+              {l("Vote")}
             </button>
+            <span
+              class="link link-hover text-sm cursor-pointer"
+              x-on:click="showResults = !showResults"
+            >
+              <span x-show="!showResults">{l("See results")}</span>
+              <span x-show="showResults" x-cloak>{l("Hide results")}</span>
+            </span>
+            <span class="text-sm text-base-content/60">·</span>
+            <span class="text-sm text-base-content/60">{total_votes(e(@object, :choices, []))} {l("votes")}</span>
           </div>
         </form>
       {/if}

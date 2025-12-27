@@ -16,6 +16,8 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   prop activity_inception, :boolean, default: false
 
   prop vote, :boolean, default: false
+  prop vote_count, :integer, default: 0
+  prop total_votes, :integer, default: 0
 
   def preloads(),
     do: [

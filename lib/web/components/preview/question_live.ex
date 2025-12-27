@@ -36,4 +36,44 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   end
 
   def maybe_truncate(input, _skip, _length), do: input
+
+  @doc "Calculate total votes count across all choices"
+  def total_votes(choices) when is_list(choices) do
+    choices
+    |> Enum.map(&choice_vote_count/1)
+    |> Enum.sum()
+  end
+
+  def total_votes(_), do: 0
+
+  @doc "Calculate unique voters count"
+  def voters_count(choices) when is_list(choices) do
+    choices
+    |> Enum.flat_map(fn choice ->
+      case e(choice, :object_voted, nil) do
+        votes when is_list(votes) -> Enum.map(votes, & &1.subject_id)
+        _ -> []
+      end
+    end)
+    |> Enum.uniq()
+    |> length()
+  end
+
+  def voters_count(_), do: 0
+
+  @doc "Get vote count for a single choice"
+  def choice_vote_count(choice) do
+    case e(choice, :object_voted, nil) do
+      votes when is_list(votes) -> length(votes)
+      _ -> 0
+    end
+  end
+
+  @doc "Calculate percentage for a choice"
+  def choice_percentage(choice, total) when total > 0 do
+    count = choice_vote_count(choice)
+    round(count * 100 / total)
+  end
+
+  def choice_percentage(_, _), do: 0
 end
