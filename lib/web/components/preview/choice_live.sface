@@ -26,7 +26,12 @@
   {#case e(@object, :object_voted, nil)}
     {#match nil}
       {#if @vote}
-        <Bonfire.Poll.VotingLive voting_format={@voting_format} question={@question} choice={@object} selected={false}>
+        <Bonfire.Poll.VotingLive
+          voting_format={@voting_format}
+          question={@question}
+          choice={@object}
+          selected={false}
+        >
           {#if @voting_format != "weighted_multiple"}
             <Bonfire.Poll.Web.Preview.ChoiceContentLive
               question={@question}
