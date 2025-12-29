@@ -146,10 +146,7 @@
                 <button id="submit-vote" class="btn btn-primary btn-sm" x-bind:disabled="!hasSelection">
                   {l("Vote")}
                 </button>
-                <span
-                  class="link link-hover text-sm cursor-pointer"
-                  x-on:click="showResults = !showResults"
-                >
+                <span class="link link-hover text-sm cursor-pointer" x-on:click="showResults = !showResults">
                   <span x-show="!showResults">{l("See results")}</span>
                   <span x-show="showResults" x-cloak>{l("Hide results")}</span>
                 </span>
