@@ -52,9 +52,7 @@
         question={@question}
         choice={@object}
         selected={Bonfire.Poll.Votes.calculate_total(votes, @question)
-        |> debug("calculate_total")
-        |> Bonfire.Poll.Votes.calculate_average_base_score(length(votes))
-        |> debug("average_base_score") || "∞"}
+        |> Bonfire.Poll.Votes.calculate_average_base_score(length(votes)) || "∞"}
         readonly={!@vote}
       >
         {#if @voting_format != "weighted_multiple"}

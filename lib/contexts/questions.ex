@@ -132,6 +132,27 @@ defmodule Bonfire.Poll.Questions do
   def end_date([_start, end_date]), do: end_date
   def end_date(_), do: nil
 
+  @doc "Returns the ActivityPub options key (oneOf/anyOf) based on voting format"
+  def options_key_for_voting_format(voting_format) do
+    case voting_format || default_voting_format() do
+      "single" -> "oneOf"
+      "multiple" -> "anyOf"
+      "weighted_multiple" -> "anyOf"
+      _ -> "anyOf"
+    end
+  end
+
+  @doc "Detects which options key (oneOf/anyOf) exists in ActivityPub data"
+  def options_key_from_ap_data(ap_data) when is_map(ap_data) do
+    cond do
+      Map.has_key?(ap_data, "oneOf") -> "oneOf"
+      Map.has_key?(ap_data, "anyOf") -> "anyOf"
+      true -> nil
+    end
+  end
+
+  def options_key_from_ap_data(_), do: nil
+
   @doc "List posts created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts \\ []) do
     # query FeedPublish
@@ -237,12 +258,7 @@ defmodule Bonfire.Poll.Questions do
     choices = question.choices || []
 
     # Determine voting format and options key
-    options_key =
-      case question.voting_format || default_voting_format() do
-        "single" -> "oneOf"
-        "multiple" -> "anyOf"
-        "weighted_multiple" -> "anyOf"
-      end
+    options_key = options_key_for_voting_format(question.voting_format)
 
     # Build choices array
     options =
@@ -411,12 +427,7 @@ defmodule Bonfire.Poll.Questions do
 
   # Shared logic for mapping AP Question data to local attrs
   defp ap_question_attrs(question_data) do
-    options_key =
-      cond do
-        Map.has_key?(question_data, "oneOf") -> "oneOf"
-        Map.has_key?(question_data, "anyOf") -> "anyOf"
-        true -> nil
-      end
+    options_key = options_key_from_ap_data(question_data)
 
     # Map ActivityPub fields to Bonfire schema fields
     choices =

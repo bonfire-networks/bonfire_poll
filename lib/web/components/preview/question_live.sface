@@ -117,42 +117,53 @@
           />
         {/for}
       {#elseif e(@object, :voting_dates, nil) != false}
-        <!-- <Bonfire.Poll.QuestionTimeLabelLive phase="voting" dates={e(@object, :voting_dates, [])} /> -->
-
-        <form
-          class="border border-base-content/20 rounded-box"
-          phx-submit="Bonfire.Poll:submit_vote"
-          phx-target={@activity_component_id}
-          x-data="{ hasSelection: false, showResults: false }"
-          x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
-        >
-          {#for choice <- e(@object, :choices, [])}
-            <Bonfire.Poll.Web.Preview.ChoiceLive
-              question={Map.drop(@object, [:choices])}
-              object={choice}
-              viewing_main_object={@viewing_main_object}
-              showing_within={@showing_within}
-              is_remote={@is_remote}
-              hide_actions={@hide_actions}
-              voting_format={e(@object, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format()}
-              vote_count={choice_vote_count(choice)}
-              total_votes={total_votes(e(@object, :choices, []))}
-              vote
-            />
-          {/for}
-          <div class="flex items-center gap-3 m-3 mt-2">
-            <input type="hidden" name="question_id" value={id(@object)}>
-            <button id="submit-vote" class="btn btn-primary btn-sm" x-bind:disabled="!hasSelection">
-              {l("Vote")}
-            </button>
-            <span class="link link-hover text-sm cursor-pointer" x-on:click="showResults = !showResults">
-              <span x-show="!showResults">{l("See results")}</span>
-              <span x-show="showResults" x-cloak>{l("Hide results")}</span>
-            </span>
-            <span class="text-sm text-base-content/60">·</span>
-            <span class="text-sm text-base-content/60">{total_votes(e(@object, :choices, []))} {l("votes")}</span>
-          </div>
-        </form>
+        {!-- Get remote poll stats (vote counts from AP object) --}
+        {#case remote_poll_stats(@object)}
+          {#match remote_stats}
+            <form
+              class="border border-base-content/20 rounded-box"
+              phx-submit="Bonfire.Poll:submit_vote"
+              phx-target={@activity_component_id}
+              x-data="{ hasSelection: false, showResults: false }"
+              x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
+            >
+              {#for choice <- e(@object, :choices, [])}
+                <Bonfire.Poll.Web.Preview.ChoiceLive
+                  question={Map.drop(@object, [:choices])}
+                  object={choice}
+                  viewing_main_object={@viewing_main_object}
+                  showing_within={@showing_within}
+                  is_remote={@is_remote}
+                  hide_actions={@hide_actions}
+                  voting_format={e(@object, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format()}
+                  vote_count={choice_vote_count(choice, remote_stats)}
+                  total_votes={max(total_votes(e(@object, :choices, [])), remote_stats.total_votes)}
+                  vote
+                />
+              {/for}
+              <div class="flex items-center gap-3 m-3 mt-2">
+                <input type="hidden" name="question_id" value={id(@object)}>
+                <button id="submit-vote" class="btn btn-primary btn-sm" x-bind:disabled="!hasSelection">
+                  {l("Vote")}
+                </button>
+                <span
+                  class="link link-hover text-sm cursor-pointer"
+                  x-on:click="showResults = !showResults"
+                >
+                  <span x-show="!showResults">{l("See results")}</span>
+                  <span x-show="showResults" x-cloak>{l("Hide results")}</span>
+                </span>
+                <span class="text-sm text-base-content/60">·</span>
+                <span class="text-sm text-base-content/60">
+                  {max(total_votes(e(@object, :choices, [])), remote_stats.total_votes)} {l("votes")}
+                </span>
+                {#if time_remaining(remote_stats.end_time)}
+                  <span class="text-sm text-base-content/60">·</span>
+                  <span class="text-sm text-base-content/60">{time_remaining(remote_stats.end_time)}</span>
+                {/if}
+              </div>
+            </form>
+        {/case}
       {/if}
     </div>
   {/if}
