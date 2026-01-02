@@ -57,10 +57,8 @@
           data-rendered={@showing_within}
           data-main-object={@viewing_main_object}
           class={[
-            "prose font-normal break-words object_body max-w-none prose-p:mb-1 prose-p:pt-0 text-[14px] prose-a:text-primary prose-a:no-underline",
-            "prose-sm previewable_truncate": !@viewing_main_object,
-            "prose-lg":
-              is_nil(current_user_id(@__context__)) && @showing_within == :thread && @viewing_main_object
+            "object_body prose-bonfire translatable prose break-normal max-w-none text-base-content prose-hr:!my-2 prose-br:hidden",
+            "previewable_truncate": !@viewing_main_object
           ]}
           :class="{'previewable_expanded': expanded}"
         >
