@@ -58,7 +58,7 @@
           data-main-object={@viewing_main_object}
           class={[
             "object_body prose-bonfire translatable prose break-normal max-w-none text-base-content prose-hr:!my-2 prose-br:hidden",
-            "previewable_truncate": !@viewing_main_object
+            previewable_truncate: !@viewing_main_object
           ]}
           :class="{'previewable_expanded': expanded}"
         >
