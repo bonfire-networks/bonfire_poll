@@ -123,7 +123,7 @@ defmodule Bonfire.Poll.Choices do
         {:error, :not_found}
 
       _ ->
-        case repo.delete(assoc) do
+        case repo.delete(assoc, allow_stale: true) do
           # TODO: federate
           {:ok, _} -> :ok
           {:error, reason} -> {:error, reason}
