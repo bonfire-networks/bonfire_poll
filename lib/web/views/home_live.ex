@@ -19,7 +19,6 @@ defmodule Bonfire.Poll.HomeLive do
        page_title: "Poll",
        back: true,
        proposals: [],
-       nav_items: Bonfire.Common.ExtensionModule.default_nav(),
        without_sidebar: true,
        without_secondary_widgets: true,
        smart_input_opts: [
