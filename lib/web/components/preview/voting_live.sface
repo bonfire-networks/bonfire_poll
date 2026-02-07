@@ -6,12 +6,13 @@
   <div
     class="p-3"
     style={
-        "outline-color: oklch(var(--#{cond do
-          is_number(@selected) and @selected > 0 -> "su"
-          @selected < 0 -> "wa"
-          @selected == "∞" -> "er"
-          true -> "n"
-        end}));": @voting_format == "weighted_multiple"}
+      "outline-color: oklch(var(--#{cond do
+        is_number(@selected) and @selected > 0 -> "su"
+        @selected < 0 -> "wa"
+        @selected == "∞" -> "er"
+        true -> "n"
+      end}));": @voting_format == "weighted_multiple"
+    }
   >
     <div class="flex justify-between">
       {#case @voting_format}
@@ -42,12 +43,24 @@
           {/for}
         {#match "multiple"}
           <label class="flex items-center gap-2">
-            <input type="checkbox" name={"vote[#{id(@choice)}]"} value="1" checked={!!@selected} class="checkbox-sm checkbox checkbox-primary">
+            <input
+              type="checkbox"
+              name={"vote[#{id(@choice)}]"}
+              value="1"
+              checked={!!@selected}
+              class="checkbox-sm checkbox checkbox-primary"
+            />
             <#slot />
           </label>
         {#match "single"}
           <label class="flex items-center gap-2">
-            <input type="radio" name="vote" value={id(@choice)} checked={@selected == 1 or @selected == true} class="radio-sm radio radio-primary">
+            <input
+              type="radio"
+              name="vote"
+              value={id(@choice)}
+              checked={@selected == 1 or @selected == true}
+              class="radio-sm radio radio-primary"
+            />
             <#slot />
           </label>
         {#match _}
