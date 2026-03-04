@@ -119,7 +119,7 @@
         {#case remote_poll_stats(@object)}
           {#match remote_stats}
             <form
-              class="border border-base-content/20 rounded-box mt-3"
+              class="border border-base-content/10 rounded-box mt-3"
               phx-submit="Bonfire.Poll:submit_vote"
               phx-target={@activity_component_id}
               x-data="{ hasSelection: false, showResults: false }"

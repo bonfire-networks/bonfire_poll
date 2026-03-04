@@ -66,7 +66,7 @@ defmodule Bonfire.Poll.PhaseSelector do
       <option value="full" selected={@selected_phase === "full"}>{l("Request options before voting")}</option>
       <option value="voting" selected={@selected_phase === "voting"}>{l("Request votes on predefined options")}</option>
     </select>
-    <!-- 
+    <!--
       <div class="flex justify-around">
         <div class="flex items-center">
           <input
@@ -176,7 +176,7 @@ defmodule Bonfire.Poll.AddProposal do
         </label>
         <ul
           tabindex="0"
-          class="dropdown-content mb-2 w-60 menu p-2 bg-base-100 shadow-sm border border-base-content/20 rounded-xl"
+          class="dropdown-content mb-2 w-60 menu p-2 bg-base-100 shadow-sm border border-base-content/10 rounded-xl"
         >
           {#for option <- templates()}
             <li>
