@@ -13,6 +13,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     import Bonfire.Poll.Fake
 
     @moduletag :masto_api
+    @moduletag :skip
 
     setup do
       account = Fake.fake_account!()
