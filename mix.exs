@@ -28,6 +28,8 @@ defmodule Bonfire.Poll.MixProject do
           {:phoenix_live_reload, "~> 1.2", only: :dev},
           {:bonfire_api_graphql, git: "https://github.com/bonfire-networks/bonfire_api_graphql",
            optional: true, runtime: false},
+           {:activity_pub, git: "https://github.com/bonfire-networks/activity_pub",
+           optional: true, runtime: false},
           {:floki, ">= 0.0.0", only: [:dev, :test]}
         ])
     ]

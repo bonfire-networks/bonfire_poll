@@ -2,6 +2,7 @@ defmodule Bonfire.Poll.Questions do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
   # import Bonfire.Poll
+  import ActivityPub.Config, only: [is_in: 2]
   import Bonfire.Boundaries.Queries
 
   alias Bonfire.Poll.Question
@@ -383,7 +384,7 @@ defmodule Bonfire.Poll.Questions do
         %{data: %{"type" => type} = activity_data} = activity,
         %{"id" => ap_id} = question_data
       )
-      when type in ["Create", "Update"] do
+      when is_in(type, ["Create", "Update"]) do
     attrs = ap_question_attrs(question_data)
 
     opts =

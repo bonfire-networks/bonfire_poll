@@ -2,6 +2,7 @@ defmodule Bonfire.Poll.Votes do
   use Bonfire.Common.Utils
   use Arrows
   import Bonfire.Poll
+  import ActivityPub.Config, only: [is_in: 2]
   alias Bonfire.Poll.{Questions, Question, Vote}
   alias Ecto.Changeset
   alias Bonfire.Social.Edges
@@ -438,7 +439,7 @@ defmodule Bonfire.Poll.Votes do
           }
         } = ap_object
       )
-      when is_binary(option_name) and type in ["Answer", "Note"] do
+      when is_binary(option_name) and is_in(type, ["Answer", "Note"]) do
     # Find local question by URI
     with {:ok, question} <-
            Questions.get_by_uri(question_uri, current_user: creator, verbs: [:vote]),
