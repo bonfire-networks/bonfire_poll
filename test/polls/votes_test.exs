@@ -27,9 +27,15 @@ defmodule Bonfire.Poll.VotesTest do
 
     test "cannot vote if voting period is not open" do
       choices = [%{name: "A"}]
-      {:ok, question} = fake_question_with_choices(%{}, choices)
+      # Voting window already closed.
+      past_start = DateTime.utc_now() |> DateTime.add(-7200, :second)
+      past_end = DateTime.utc_now() |> DateTime.add(-3600, :second)
+
+      {:ok, question} =
+        fake_question_with_choices(%{voting_dates: [past_start, past_end]}, choices)
+
       choice = hd(question.choices)
-      # Simulate a vote
+
       assert {:error, _} =
                Bonfire.Poll.Votes.vote(fake_user!(), question, [
                  %{choice_id: choice.id, weight: 1}
@@ -130,6 +136,39 @@ defmodule Bonfire.Poll.VotesTest do
       assert Votes.results_visible?(choice, ended_question, current_user: nil)
       # User can edit 
       assert Votes.results_visible?(choice, question, current_user: user)
+    end
+
+    test "re-voting on the same choice silently keeps the original weight" do
+      # Pins the current behaviour of `register_vote_choice/4` so a future
+      # "edit your vote while voting is open" feature has an explicit
+      # regression to update. Today, a second `vote/4` call with a different
+      # weight returns success but the persisted `vote_weight` is unchanged.
+      user = fake_user!()
+      voter = fake_user!()
+      choices = [%{name: "A"}]
+
+      {:ok, question} =
+        fake_question_with_choices(
+          %{voting_dates: [DateTime.utc_now(), DateTime.add(DateTime.utc_now(), 3600, :second)]},
+          choices,
+          current_user: user
+        )
+
+      choice = hd(question.choices)
+
+      assert {:ok, _} =
+               Votes.vote(voter, question, [%{choice_id: choice.id, weight: -1}])
+
+      assert {:ok, %{vote_weight: stored_weight}} = Votes.get(voter, choice)
+      assert stored_weight == -1
+
+      # Re-submit with a different weight. The function returns success but
+      # the row keeps the original vote_weight.
+      assert {:ok, _} =
+               Votes.vote(voter, question, [%{choice_id: choice.id, weight: 2}])
+
+      assert {:ok, %{vote_weight: stored_after_revote}} = Votes.get(voter, choice)
+      assert stored_after_revote == -1
     end
   end
 end

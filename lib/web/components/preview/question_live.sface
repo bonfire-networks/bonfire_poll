@@ -1,165 +1,304 @@
-<div
-  data-id="activity_question"
-  x-data="{expanded: false, expandable: $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight}"
-  data-rendered={@showing_within}
-  data-main-object={@viewing_main_object}
-  class={[
-    "note previewable_activity cursor-pointer mt-0.5 max-w-[594px]",
-    "!max-w-full":
-      is_nil(current_user_id(@__context__)) && @showing_within == :thread && @viewing_main_object
-  ]}
-  x-transition
-  x-ref="question_container"
->
-  {!-- x-show={if @showing_within == :thread && !@viewing_main_object, do: "show_replies"} --}
-  {!-- id={"note-#{@activity_inception}-#{id(@activity) || id(@object) || "no-id"}-#{e(assigns, :viewing_main_object, false)}"} --}
-
-  {#case e(post_content(@object), :name, nil)}
-    {#match nil}
-    {#match name}
-      <div
-        :if={name != @thread_title}
-        class="w-full h-auto max-w-full p-0 m-0 my-1 text-xl font-semibold"
-      >
-        {rich(name)}
-      </div>
-  {/case}
-
-  {#if @cw && e(post_content(@object), :html_body, nil)}
-    <div class="flex items-baseline gap-2 mb-2">
-      <p>
-        <span class="prose max-w-prose prose-p:pt-1">{l("Content Warning")}</span>
-        {#if !@hide_actions}
-          <button
-            x-on:click="content_open = ! content_open; $nextTick(() => { expandable = $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight });"
-            x-text={"content_open ? '#{l("Show less")}' : '#{l("Show more")}'"}
-            class="show_more_toggle_action ml-1 normal-case !border !border-base-content/30 btn-outline btn btn-xs"
+{#case view_state(@object)}
+  {#match %{
+      choices: choices,
+      has_voted: has_voted,
+      remote_stats: remote_stats,
+      end_time: end_time,
+      closed: closed,
+      locked: locked,
+      winning_ids: winning_ids,
+      voting_format: voting_format,
+      total_votes: total_votes
+    }}
+    <div
+      data-id="activity_question"
+      data-rendered={@showing_within}
+      data-main-object={@viewing_main_object}
+      x-data="{expanded: false, expandable: $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight, showResults: false, content_open: false}"
+      x-transition
+      x-ref="question_container"
+      class={[
+        "previewable_activity cursor-pointer mt-0.5 max-w-[594px]",
+        "!max-w-full":
+          is_nil(current_user_id(@__context__)) and @showing_within == :thread and
+            @viewing_main_object
+      ]}
+    >
+      {#case e(post_content(@object), :name, nil)}
+        {#match nil}
+        {#match name}
+          <div
+            :if={name != @thread_title}
+            class={[
+              "w-full h-auto max-w-full p-0 m-0 my-1 font-semibold",
+              "text-base": @viewing_main_object != true,
+              "text-xl": @viewing_main_object == true
+            ]}
           >
-            {l("Show more")}
-          </button>
-        {#else}
-          <div class="ml-1 normal-case !border !border-base-content/30 btn-outline btn btn-xs">
-            {l("Show more")}
+            {rich(name)}
           </div>
-        {/if}
-      </p>
-    </div>
-  {/if}
+      {/case}
 
-  <div x-show={if @cw, do: "content_open"} x-cloak={@cw} x-collapse={@cw}>
-    {#case e(post_content(@object), :html_body, nil)}
-      {#match nil}
-      {#match html_body}
-        <div
-          x-ref="note"
-          data-id="object_body"
-          data-inception={@activity_inception}
-          data-rendered={@showing_within}
-          data-main-object={@viewing_main_object}
-          class={[
-            "object_body prose-bonfire translatable prose break-normal max-w-none text-base-content prose-hr:!my-2 prose-br:hidden",
-            previewable_truncate: !@viewing_main_object
-          ]}
-          :class="{'previewable_expanded': expanded}"
-        >
-          {rich(
-            # maybe_truncate(
-            html_body,
-            #  @viewing_main_object || @showing_within not in [nil, :feed, :search, :notifications]
-            # ),
-            skip_markdown: @is_remote || @showing_within == :search,
-            __unsafe__: !@is_remote
-          )}
+      {#if @cw && e(post_content(@object), :html_body, nil)}
+        <div class="flex items-baseline gap-2 mb-2">
+          <p>
+            <span class="prose max-w-prose prose-p:pt-1">{l("Content Warning")}</span>
+            {#if !@hide_actions}
+              <button
+                x-on:click="content_open = ! content_open; $nextTick(() => { expandable = $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight });"
+                x-text={"content_open ? '#{l("Show less")}' : '#{l("Show more")}'"}
+                class="show_more_toggle_action ml-1 normal-case !border !border-base-content/30 btn-outline btn btn-xs"
+              >
+                {l("Show more")}
+              </button>
+            {#else}
+              <div class="ml-1 normal-case !border !border-base-content/30 btn-outline btn btn-xs">
+                {l("Show more")}
+              </div>
+            {/if}
+          </p>
         </div>
+      {/if}
 
-        <div :if={@showing_within != :smart_input} x-cloak x-show="expandable">
-          <button
-            type="button"
-            @click="expanded = !expanded"
-            x-text="expanded ? 'Read less' : 'Read more'"
-            class="link text-sm mt-2 font-semibold link-hover link-primary normal-case"
-          >{l("Read more")}</button>
-        </div>
-    {/case}
-  </div>
-
-  {#if not is_nil(e(@object, :choices, nil))}
-    <div :if={e(@object, :weighting, nil)} class="flex justify-end items-center">
-      <div class="collapse collapse-arrow bg-base-200">
-        <input type="checkbox">
-        <div class="collapse-title text-l font-medium">
-          {l("Negative Score Weighting")}: {case e(@object, :weighting, nil) do
-            1 -> l("None")
-            nil -> "?"
-            int -> "x#{int}"
-          end}
-        </div>
-        <div class="collapse-content prose">
-          {rich(Bonfire.Poll.LiveHandler.negative_score_info())}
-        </div>
-      </div>
-    </div>
-    <div>
-      {#if e(@object, :proposal_dates, []) != []}
-        <!-- <Bonfire.Poll.QuestionTimeLabelLive phase={"proposal"} dates={e(@object, :proposal_dates, [])} /> -->
-
-        {#for choice <- e(@object, :choices, [])}
-          <Bonfire.Poll.Web.Preview.ChoiceLive
-            question={Map.drop(@object, [:choices])}
-            object={choice}
-            viewing_main_object={@viewing_main_object}
-            showing_within={@showing_within}
-            is_remote={@is_remote}
-            hide_actions={@hide_actions}
-            voting_format={e(@object, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format()}
-          />
-        {/for}
-      {#elseif e(@object, :voting_dates, nil) != false}
-        {!-- Get remote poll stats (vote counts from AP object) --}
-        {#case remote_poll_stats(@object)}
-          {#match remote_stats}
-            <form
-              class="border border-base-content/10 rounded-box mt-3"
-              phx-submit="Bonfire.Poll:submit_vote"
-              phx-target={@activity_component_id}
-              x-data="{ hasSelection: false, showResults: false }"
-              x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
+      <div x-show={if @cw, do: "content_open"} x-cloak={@cw} x-collapse={@cw}>
+        {#case e(post_content(@object), :html_body, nil)}
+          {#match nil}
+          {#match html_body}
+            <div
+              x-ref="note"
+              data-id="object_body"
+              data-inception={@activity_inception}
+              data-rendered={@showing_within}
+              data-main-object={@viewing_main_object}
+              class={[
+                "object_body prose-bonfire translatable prose break-normal max-w-none text-base-content prose-hr:!my-2 prose-br:hidden",
+                previewable_truncate: !@viewing_main_object
+              ]}
+              :class="{'previewable_expanded': expanded}"
             >
-              {#for choice <- e(@object, :choices, [])}
-                <Bonfire.Poll.Web.Preview.ChoiceLive
+              {rich(html_body,
+                skip_markdown: @is_remote || @showing_within == :search,
+                __unsafe__: !@is_remote
+              )}
+            </div>
+
+            <div :if={@showing_within != :smart_input} x-cloak x-show="expandable">
+              <button
+                type="button"
+                @click="expanded = !expanded"
+                x-text="expanded ? 'Read less' : 'Read more'"
+                class="link text-sm mt-2 font-semibold link-hover link-primary normal-case"
+              >{l("Read more")}</button>
+            </div>
+        {/case}
+      </div>
+
+      {#if choices != []}
+        {#if e(@object, :proposal_dates, []) != []}
+          <div class="mt-3 rounded-md border border-base-content/10 overflow-hidden">
+            <div class="flex items-center gap-2 px-3 py-2 text-xs uppercase tracking-wider text-base-content/60 bg-base-content/[0.02] border-b border-base-content/8">
+              <Iconify.iconify icon="ph:lightbulb-duotone" class="h-3.5 w-3.5" />
+              <span>{l("Proposal phase")}</span>
+              {#case time_remaining(List.last(e(@object, :proposal_dates, [])))}
+                {#match nil}
+                {#match label}
+                  <span class="text-base-content/40" aria-hidden="true">·</span>
+                  <span class="normal-case tracking-normal">{label}</span>
+              {/case}
+            </div>
+
+            <div class="divide-y divide-base-content/8">
+              {#for {choice, idx} <- Enum.with_index(choices)}
+                <ChoiceLive
                   question={Map.drop(@object, [:choices])}
                   object={choice}
+                  index={idx}
                   viewing_main_object={@viewing_main_object}
                   showing_within={@showing_within}
                   is_remote={@is_remote}
                   hide_actions={@hide_actions}
-                  voting_format={e(@object, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format()}
-                  vote_count={choice_vote_count(choice, remote_stats)}
-                  total_votes={max(total_votes(e(@object, :choices, [])), remote_stats.total_votes)}
-                  vote
+                  voting_format={voting_format}
+                  compact={@viewing_main_object != true}
+                  vote={false}
+                  results_visible={false}
+                  show_author
                 />
               {/for}
-              <div class="flex items-center gap-3 m-3 mt-2">
+            </div>
+
+            {#if not is_nil(current_user_id(@__context__)) and
+                Bonfire.Poll.Questions.proposal_open?(@object)}
+              <form
+                class="flex items-center gap-2 px-3 py-2.5 border-t border-base-content/8 bg-base-content/[0.02]"
+                phx-submit="Bonfire.Poll:submit_proposal"
+                phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
+                data-role="propose-form"
+              >
                 <input type="hidden" name="question_id" value={id(@object)}>
-                <button id="submit-vote" class="btn btn-primary btn-sm" x-bind:disabled="!hasSelection">
-                  {l("Vote")}
+                <label for={"propose_#{id(@object)}"} class="sr-only">
+                  {l("Your suggestion")}
+                </label>
+                <input
+                  type="text"
+                  id={"propose_#{id(@object)}"}
+                  name="proposal[name]"
+                  placeholder={l("Suggest an option")}
+                  required
+                  maxlength="200"
+                  class="flex-1 min-w-0 rounded-md border border-base-content/20 bg-base-100 px-3 py-2 text-sm text-base-content placeholder:text-base-content/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
+                <button type="submit" data-role="propose-submit" class="btn btn-primary btn-sm">
+                  {l("Suggest")}
                 </button>
-                <span class="link link-hover text-sm cursor-pointer" x-on:click="showResults = !showResults">
-                  <span x-show="!showResults">{l("See results")}</span>
-                  <span x-show="showResults" x-cloak>{l("Hide results")}</span>
-                </span>
-                <span class="text-sm text-base-content/60">·</span>
-                <span class="text-sm text-base-content/60">
-                  {max(total_votes(e(@object, :choices, [])), remote_stats.total_votes)} {l("votes")}
-                </span>
-                {#if time_remaining(remote_stats.end_time)}
-                  <span class="text-sm text-base-content/60">·</span>
-                  <span class="text-sm text-base-content/60">{time_remaining(remote_stats.end_time)}</span>
-                {/if}
+              </form>
+            {/if}
+          </div>
+        {#elseif e(@object, :voting_dates, nil) != false}
+          <form
+            class="mt-3 rounded-md border border-base-content/10 overflow-hidden"
+            phx-submit="Bonfire.Poll:submit_vote"
+            phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
+            x-data="{ hasSelection: false }"
+            x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
+          >
+            {#if voting_format == "weighted_multiple" and vetoed?(choices)}
+              <div
+                class="flex items-center gap-2 px-3 py-2 bg-error/[0.08] border-b border-error/20 text-error text-sm"
+                role="status"
+                data-role="veto-banner"
+              >
+                <Iconify.iconify icon="ph:prohibit-bold" class="h-4 w-4 shrink-0" />
+                <span class="font-medium">{l("Vetoed, no consensus reached.")}</span>
               </div>
-            </form>
-        {/case}
+            {/if}
+
+            {#if closed}
+              <div
+                class="flex items-center gap-2 px-3 py-2 bg-base-content/[0.03] border-b border-base-content/8 text-xs text-base-content/60 uppercase tracking-wider"
+                data-role="closed-header"
+              >
+                <Iconify.iconify icon="ph:lock-key" class="h-3.5 w-3.5" />
+                <span>{l("Closed · final results")}</span>
+              </div>
+            {/if}
+
+            <input type="hidden" name="question_id" value={id(@object)}>
+
+            <div class="divide-y divide-base-content/8">
+              {#for {choice, idx} <- Enum.with_index(choices)}
+                <ChoiceLive
+                  question={Map.drop(@object, [:choices])}
+                  object={choice}
+                  index={idx}
+                  viewing_main_object={@viewing_main_object}
+                  showing_within={@showing_within}
+                  is_remote={@is_remote}
+                  hide_actions={@hide_actions}
+                  voting_format={voting_format}
+                  compact={@viewing_main_object != true}
+                  vote={not closed and not is_nil(current_user_id(@__context__))}
+                  vote_count={choice_vote_count(choice, remote_stats)}
+                  total_votes={total_votes}
+                  has_voted_overall={has_voted}
+                  results_visible={(closed or has_voted) and not locked}
+                  is_winner={closed and id(choice) in winning_ids and total_votes > 0}
+                  is_vetoed={voting_format == "weighted_multiple" and choice_vetoed?(choice)}
+                  closed={closed}
+                />
+              {/for}
+            </div>
+
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 bg-base-content/[0.02] border-t border-base-content/8">
+              {#if is_nil(current_user_id(@__context__))}
+                <a
+                  href="/login"
+                  class="btn btn-sm btn-ghost border border-base-content/20"
+                  data-role="sign-in-to-vote"
+                >
+                  {l("Sign in to vote")}
+                </a>
+              {#elseif closed}
+              {#elseif has_voted}
+                <span
+                  class="inline-flex items-center gap-1.5 text-sm text-primary font-medium"
+                  data-role="voted-indicator"
+                >
+                  <Iconify.iconify icon="ph:check-circle-fill" class="h-4 w-4" />
+                  {l("Voted")}
+                </span>
+              {#else}
+                <button
+                  type="submit"
+                  id={"submit-vote-#{id(@object)}"}
+                  data-role="submit-vote"
+                  class="btn btn-primary btn-sm"
+                  x-bind:disabled={if voting_format == "weighted_multiple",
+                    do: "false",
+                    else: "!hasSelection"}
+                >
+                  {if voting_format == "weighted_multiple",
+                    do: l("Submit votes"),
+                    else: l("Vote")}
+                </button>
+              {/if}
+
+              {#if not closed and not has_voted}
+                {#if locked}
+                  <span
+                    class="text-sm text-base-content/40 cursor-not-allowed"
+                    title={l("Results hidden until poll closes.")}
+                    data-role="results-toggle-locked"
+                  >
+                    {l("See results")}
+                  </span>
+                {#else}
+                  <button
+                    type="button"
+                    x-on:click="showResults = !showResults"
+                    class="text-sm link link-hover text-base-content/70 hover:text-base-content"
+                    data-role="results-toggle"
+                  >
+                    <span x-show="!showResults">{l("See results")}</span>
+                    <span x-show="showResults" x-cloak>{l("Hide results")}</span>
+                  </button>
+                {/if}
+                <span class="text-base-content/30" aria-hidden="true">·</span>
+              {/if}
+
+              {#if not locked}
+                <span class="text-sm text-base-content/60 tabular-nums" data-role="vote-count">
+                  {l("%{count} votes", count: total_votes)}
+                </span>
+              {/if}
+
+              {#case time_remaining(end_time)}
+                {#match nil}
+                {#match label}
+                  {#if not locked}
+                    <span class="text-base-content/30" aria-hidden="true">·</span>
+                  {/if}
+                  <span
+                    class={[
+                      "text-sm tabular-nums",
+                      "text-base-content/60": not closed,
+                      "text-base-content/70 font-medium": closed
+                    ]}
+                    data-role="time-remaining"
+                  >
+                    {label}
+                  </span>
+              {/case}
+
+              {#if @is_remote}
+                <span class="text-base-content/30" aria-hidden="true">·</span>
+                <span class="inline-flex items-center gap-1 text-xs text-base-content/55">
+                  <Iconify.iconify icon="ph:globe-simple" class="h-3 w-3" />
+                  {l("Federated")}
+                </span>
+              {/if}
+            </div>
+          </form>
+        {/if}
       {/if}
     </div>
-  {/if}
-</div>
+{/case}

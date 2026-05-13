@@ -57,4 +57,152 @@ defmodule Bonfire.Poll.QuestionsTest do
     refute Bonfire.Poll.Questions.proposal_open?(ended_question)
     assert Bonfire.Poll.Questions.proposal_ended?(ended_question)
   end
+
+  describe "full form-flow Questions.create" do
+    # End-to-end test for the path the composer's LiveHandler runs through:
+    #   form params  →  input_to_atoms  →  preset_params + question_attrs
+    #   →  Questions.create  →  epic (PresetAttrs, Question.Create, …, Choices.Create)
+    #
+    # Locks in three regressions:
+    #   1. `Question.changeset` uses `Needle.Changesets.cast/3` so the
+    #      Pointable's :id is set before `put_assoc(:activity, …)` runs.
+    #      Otherwise the activity row is never inserted.
+    #   2. `Bonfire.Poll.Acts.PresetAttrs` merges preset-derived
+    #      voting_format/weighting/voting_dates into :question_attrs.
+    #   3. `Choices.simple_create_and_put` handles mixed-key indexed maps
+    #      (the shape `input_to_atoms` produces when some `:"N"` atoms
+    #      are pre-registered in the BEAM atom table).
+
+    import Ecto.Query
+
+    test "submitting a Quick poll persists Question + Activity + 2 choices" do
+      user = Bonfire.Me.Fake.fake_user!()
+
+      # Simulate the form's submitted params after the LiveHandler's first
+      # clause has unwrapped `"post"`.
+      form_params = %{
+        "choices" => %{"0" => %{"name" => "Yes"}, "1" => %{"name" => "No"}},
+        "post_content" => %{"html_body" => "Should we ship it?"},
+        "poll_preset" => "quick",
+        "poll_duration_hours" => "24",
+        "poll_tuning_proposal_phase" => "false",
+        "poll_tuning_hide_results" => "false",
+        "poll_tuning_allow_vetoes" => "false",
+        "to_boundaries" => ["public"]
+      }
+
+      attrs =
+        form_params
+        |> Map.drop([
+          "poll_preset",
+          "poll_duration_hours",
+          "poll_tuning_proposal_phase",
+          "poll_tuning_hide_results",
+          "poll_tuning_allow_vetoes"
+        ])
+        |> Bonfire.Common.Enums.input_to_atoms(also_discard_unknown_nested_keys: false)
+
+      preset_params = %{
+        preset: "quick",
+        tuning: %{proposal_phase: false, hide_results: false, allow_vetoes: false},
+        duration_hours: 24
+      }
+
+      opts = [
+        current_user: user,
+        question_attrs: attrs,
+        preset_params: preset_params,
+        boundary: "public"
+      ]
+
+      assert {:ok, question} = Bonfire.Poll.Questions.create(opts)
+      assert question.id
+
+      # Activity exists and belongs to the user
+      activity =
+        Bonfire.Common.Repo.one(
+          from a in Bonfire.Data.Social.Activity, where: a.object_id == ^question.id
+        )
+
+      assert activity
+      assert activity.subject_id == user.id
+
+      # Quick preset's weighting (1) ends up on the persisted Question.
+      # Regression for the silent-override bug: the composer used to ship
+      # `weighting=3` from the Advanced WeightSelector's hardcoded default,
+      # which then beat preset.weighting via `PresetAttrs`'s form-wins merge.
+      # When form_attrs doesn't include weighting (the unmodified-Advanced
+      # case), the preset's value must win.
+      reloaded = Bonfire.Common.Repo.get(Bonfire.Poll.Question, question.id)
+      assert reloaded.weighting == 1
+      assert reloaded.voting_format == "single"
+
+      # Both choices are saved and linked via Ranked
+      choice_count =
+        Bonfire.Common.Repo.aggregate(
+          from(r in Bonfire.Data.Assort.Ranked, where: r.scope_id == ^question.id),
+          :count
+        )
+
+      assert choice_count == 2
+
+      # And readable back by the creator (boundary applied)
+      assert {:ok, _} = Bonfire.Poll.Questions.read(question.id, current_user: user)
+    end
+
+    test "Group decision preset enables proposal phase and weighted voting" do
+      user = Bonfire.Me.Fake.fake_user!()
+
+      attrs = %{
+        choices: %{"0" => %{name: "A"}, "1" => %{name: "B"}},
+        post_content: %{html_body: "Group decision?"}
+      }
+
+      preset_params = %{
+        preset: "group_decision",
+        tuning: %{proposal_phase: true, hide_results: true, allow_vetoes: false},
+        duration_hours: 72
+      }
+
+      assert {:ok, question} =
+               Bonfire.Poll.Questions.create(
+                 current_user: user,
+                 question_attrs: attrs,
+                 preset_params: preset_params,
+                 boundary: "public"
+               )
+
+      reloaded = Bonfire.Common.Repo.get(Bonfire.Poll.Question, question.id)
+      assert reloaded.voting_format == "weighted_multiple"
+      assert reloaded.weighting == 3
+      assert [_, _] = reloaded.proposal_dates
+      assert [_, _] = reloaded.voting_dates
+    end
+
+    test "form attributes override preset (Layer 3 wins over Layer 1)" do
+      user = Bonfire.Me.Fake.fake_user!()
+
+      # Quick preset gives voting_format="single", weighting=1.
+      # Form supplies weighting=5 (as if from the Advanced section's WeightSelector).
+      attrs = %{
+        choices: [%{name: "A"}, %{name: "B"}],
+        post_content: %{html_body: "Override test"},
+        weighting: 5
+      }
+
+      preset_params = %{preset: "quick", tuning: %{}, duration_hours: 24}
+
+      assert {:ok, question} =
+               Bonfire.Poll.Questions.create(
+                 current_user: user,
+                 question_attrs: attrs,
+                 preset_params: preset_params,
+                 boundary: "public"
+               )
+
+      reloaded = Bonfire.Common.Repo.get(Bonfire.Poll.Question, question.id)
+      # The form's weighting beats the preset's.
+      assert reloaded.weighting == 5
+    end
+  end
 end

@@ -6,6 +6,7 @@ defmodule Bonfire.Poll.Question do
 
   import Ecto.Changeset
   use Bonfire.Common.Config
+  alias Needle.Changesets
 
   pointable_schema do
     # field :name, :string
@@ -19,11 +20,15 @@ defmodule Bonfire.Poll.Question do
   def voting_formats,
     do: Config.get([:bonfire_poll, :voting_formats], ~w(single multiple weighted_multiple))
 
-  @doc false
+  @doc """
+  Build a changeset for a Question. Uses `Needle.Changesets.cast/3` so the
+  Pointable's `:id` is auto-generated before `put_assoc(:activity, …)` runs;
+  with `Ecto.Changeset.cast/3` the activity's FK copy fails and the row
+  never inserts, leaving the poll invisible.
+  """
   def changeset(question \\ %Bonfire.Poll.Question{}, attrs) do
     question
-    # :name, :description, 
-    |> cast(attrs, [
+    |> Changesets.cast(attrs, [
       :proposal_dates,
       :voting_dates,
       :weighting,

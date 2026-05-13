@@ -1,6 +1,9 @@
 defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   use Bonfire.UI.Common.Web, :stateless_component
-  alias Bonfire.Common.Text
+  alias Bonfire.Poll.Votes
+  alias Bonfire.Poll.Web.Preview.QuestionLive
+  alias Bonfire.Poll.Web.Preview.ChoiceContentLive
+  alias Bonfire.Poll.VotingLive
 
   prop object, :any
   prop question, :any, default: nil
@@ -8,19 +11,56 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   prop activity, :any, default: nil
   prop viewing_main_object, :boolean, default: false
   prop showing_within, :atom, default: nil
-  # prop activity_inception, :any, default: nil
   prop cw, :boolean, default: nil
   prop is_remote, :boolean, default: false
-  # prop thread_mode, :atom, default: nil
   prop hide_actions, :boolean, default: false
   prop activity_inception, :boolean, default: false
 
   prop vote, :boolean, default: false
   prop vote_count, :integer, default: 0
   prop total_votes, :integer, default: 0
+  prop has_voted_overall, :boolean, default: false
+  prop results_visible, :boolean, default: false
+  prop is_winner, :boolean, default: false
+  prop is_vetoed, :boolean, default: false
+  prop closed, :boolean, default: false
+  prop show_author, :boolean, default: false
+  prop index, :integer, default: 0
+  prop compact, :boolean, default: false
 
-  def preloads(),
-    do: [
-      :post_content
-    ]
+  def preloads(), do: [:post_content]
+
+  def proposer_username(choice), do: e(choice, :created, :creator, :character, :username, nil)
+
+  def proposer_name(choice) do
+    e(choice, :created, :creator, :profile, :name, nil) || proposer_username(choice)
+  end
+
+  def percent(vote_count, total) when is_integer(vote_count) and is_integer(total) and total > 0,
+    do: round(vote_count * 100 / total)
+
+  def percent(_, _), do: 0
+
+  defdelegate voted_on?(choice), to: QuestionLive
+
+  @doc """
+  Raw `vote_weight` the user picked (`-2`..`2`), `"∞"` for a veto (stored as
+  `nil` by the schema's `empty_values`), or `nil` when no vote yet.
+  """
+  def user_score(choice, _question) do
+    case e(choice, :object_voted, nil) do
+      [%{vote: %{vote_weight: nil}} | _] -> "∞"
+      [%{vote: %{vote_weight: w}} | _] when is_integer(w) -> w
+      _ -> nil
+    end
+  end
+
+  def score_label(score) do
+    Enum.find(Votes.scores(), fn {value, _name, _icon, _desc} -> value == score end)
+  end
+
+  def score_color_class(score) when is_number(score) and score > 0, do: "text-success"
+  def score_color_class(score) when is_number(score) and score < 0, do: "text-warning"
+  def score_color_class("∞"), do: "text-error"
+  def score_color_class(_), do: "text-base-content/70"
 end

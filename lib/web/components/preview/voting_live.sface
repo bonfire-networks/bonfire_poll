@@ -1,71 +1,142 @@
-{!--        <span class='flex justify-end'>
-        <span>{ l("Voters") }:&nbsp;</span>
-        <span class='no-voters'>{ length(@question.voters || []) }</span>
-    </span> --}
-<div class="proposal-list">
-  <div
-    class="p-3"
-    style={
-      "outline-color: oklch(var(--#{cond do
-        is_number(@selected) and @selected > 0 -> "su"
-        @selected < 0 -> "wa"
-        @selected == "∞" -> "er"
-        true -> "n"
-      end}));": @voting_format == "weighted_multiple"
-    }
-  >
-    <div class="flex justify-between">
-      {#case @voting_format}
-        {#match "weighted_multiple"}
-          {#for {i, name, icon, description} <- @scores || Bonfire.Poll.Votes.scores()}
-            <div class={["flex", "text-success": is_number(i) and i > 0, "text-warning": i < 0, "text-error": i == "∞"]}>
-              <div class="tooltip" data-tip={"#{description} (#{i})"}>
-                {#if @readonly}
-                  <div class="flex flex-row">
-                    <Iconify.iconify class={["h-8 w-8", "opacity-30": i != @selected]} icon={icon} />
-                    <div class="text-xs">{name}</div>
-                  </div>
-                {#else}
-                  <label class="swap">
-                    <input name={"vote[#{id(@choice)}]"} value={i} type="radio" checked={i == @selected}>
-                    <div class="flex flex-row swap-on opacity-100">
-                      <Iconify.iconify class="h-8 w-8" icon={icon} />
-                      <div class="text-xs">{name}</div>
-                    </div>
-                    <div class="flex flex-row swap-off">
-                      <Iconify.iconify class="h-8 w-8 opacity-30" icon={icon} />
-                      <div class="text-xs">{name}</div>
-                    </div>
-                  </label>
-                {/if}
-              </div>
+{#case @voting_format}
+  {#match "weighted_multiple"}
+    {!-- choice_id rides along so the submit handler can map back to it;
+         the weight lives in a hidden input that `phx-click` writes to. --}
+    <input type="hidden" name={"votes[#{@index}][choice_id]"} value={id(@choice)}>
+    <fieldset
+      id={"vote-input-#{@index}"}
+      role="radiogroup"
+      phx-update="ignore"
+      class={[
+        "border-t border-base-content/10",
+        "px-3 py-2": @compact,
+        "px-3 py-2.5": !@compact
+      ]}
+    >
+      <legend class="sr-only">{l("Your reaction to this choice")}</legend>
+      <input
+        type="hidden"
+        id={"vote-weight-#{@index}"}
+        name={"votes[#{@index}][weight]"}
+        value={chosen_value(@selected)}
+      />
+      <div class={[
+        "flex flex-wrap items-center justify-between",
+        "gap-1": @compact,
+        "gap-1.5 sm:gap-2": !@compact
+      ]}>
+        {#for {i, name, icon, description} <- scores_or_default(@scores)}
+          {#if @readonly}
+            <div
+              class={[
+                "inline-flex flex-col items-center gap-0.5 rounded-md",
+                "min-w-[40px] px-1 py-0.5": @compact,
+                "min-w-[44px] px-1.5 py-1": !@compact,
+                "opacity-30": i != @selected,
+                "opacity-100 bg-base-content/[0.06]": i == @selected
+              ]}
+              data-role="vote-score"
+              data-score={"#{i}"}
+              aria-current={i == @selected && "true"}
+              title={description}
+            >
+              <Iconify.iconify
+                icon={icon}
+                class={[
+                  score_color_class(i),
+                  "h-5 w-5": @compact,
+                  "h-6 w-6": !@compact
+                ]}
+              />
+              <span class={[
+                "leading-tight font-medium",
+                "text-[9px]": @compact,
+                "text-[10px]": !@compact,
+                "text-base-content": i == @selected,
+                "text-base-content/60": i != @selected
+              ]}>{name}</span>
             </div>
-          {/for}
-        {#match "multiple"}
-          <label class="flex items-center gap-2">
-            <input
-              type="checkbox"
-              name={"vote[#{id(@choice)}]"}
-              value="1"
-              checked={!!@selected}
-              class="checkbox-sm checkbox checkbox-primary"
-            />
-            <#slot />
-          </label>
-        {#match "single"}
-          <label class="flex items-center gap-2">
-            <input
-              type="radio"
-              name="vote"
-              value={id(@choice)}
-              checked={@selected == 1 or @selected == true}
-              class="radio-sm radio radio-primary"
-            />
-            <#slot />
-          </label>
-        {#match _}
-          {!-- fallback: show nothing or a message --}
-      {/case}
+          {#else}
+            {!-- Buttons + aria-checked driven by Phoenix.LiveView.JS, not
+                 native radios — LV form-state lifecycle clobbered the user's
+                 selection between clicks on native ones. --}
+            <button
+              type="button"
+              role="radio"
+              id={"vote-btn-#{@index}-#{score_key(i)}"}
+              aria-checked={if i == @selected, do: "true", else: "false"}
+              phx-click={choose_weight_js(
+                "vote-input-#{@index}",
+                "vote-btn-#{@index}-#{score_key(i)}",
+                "vote-weight-#{@index}",
+                i
+              )}
+              data-role="vote-score"
+              data-score={"#{i}"}
+              title={description}
+              class={[
+                "group relative inline-flex flex-col items-center gap-0.5 cursor-pointer rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
+                "min-w-[40px] min-h-[40px] px-1 py-0.5": @compact,
+                "min-w-[44px] min-h-[44px] px-1.5 py-1": !@compact
+              ]}
+            >
+              <Iconify.iconify
+                icon={icon}
+                class={[
+                  "transition opacity-40 group-hover:opacity-90 group-aria-checked:opacity-100 group-aria-checked:scale-110",
+                  score_color_class(i),
+                  "h-5 w-5": @compact,
+                  "h-6 w-6": !@compact
+                ]}
+              />
+              <span class={[
+                "leading-tight font-medium text-base-content/60 group-aria-checked:text-base-content",
+                "text-[9px]": @compact,
+                "text-[10px]": !@compact
+              ]}>
+                {name}
+              </span>
+              <span class="sr-only">{description}</span>
+            </button>
+          {/if}
+        {/for}
+      </div>
+    </fieldset>
+  {#match "multiple"}
+    <div id={"vote-input-#{id(@choice) || "noid"}"} phx-update="ignore">
+      <label class={[
+        "flex items-center gap-3 cursor-pointer px-3 py-2.5 min-h-[44px] rounded-md transition",
+        "hover:bg-base-content/[0.04] focus-within:bg-base-content/[0.06]": !@readonly,
+        "cursor-default": @readonly
+      ]}>
+        <input
+          type="checkbox"
+          name={"vote[#{id(@choice) || "_"}]"}
+          value="1"
+          checked={!!@selected}
+          disabled={@readonly}
+          class="checkbox checkbox-sm checkbox-primary"
+        />
+        <div class="flex-1 min-w-0"><#slot /></div>
+      </label>
     </div>
-  </div>
-</div>
+  {#match "single"}
+    <div id={"vote-input-#{id(@choice) || "noid"}"} phx-update="ignore">
+      <label class={[
+        "flex items-center gap-3 cursor-pointer px-3 py-2.5 min-h-[44px] rounded-md transition",
+        "hover:bg-base-content/[0.04] focus-within:bg-base-content/[0.06]": !@readonly,
+        "cursor-default": @readonly
+      ]}>
+        <input
+          type="radio"
+          name="vote"
+          value={id(@choice)}
+          checked={@selected == 1 or @selected == true}
+          disabled={@readonly}
+          class="radio radio-sm radio-primary"
+        />
+        <div class="flex-1 min-w-0"><#slot /></div>
+      </label>
+    </div>
+  {#match _}
+{/case}

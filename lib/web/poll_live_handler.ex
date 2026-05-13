@@ -2,11 +2,42 @@ defmodule Bonfire.Poll.LiveHandler do
   use Bonfire.UI.Common.Web, :live_handler
   import Untangle
 
-  # alias Bonfire.Data.Social.PostContent
-  alias Bonfire.Poll.{Questions, Question}
-  alias Bonfire.Poll.{WeightSelector, PhaseSelector}
+  alias Bonfire.Poll.{Questions, Presets}
+  alias Bonfire.Common.Types
 
-  # alias Ecto.Changeset
+  defp path_for_question(id) when is_binary(id) do
+    case Questions.read(id, []) do
+      {:ok, q} -> path(q)
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp path_for_question(_), do: nil
+
+  defp preset_params_from_form(params) do
+    tuning = Map.new(Presets.tuning_keys(), &{&1, parse_bool(params["poll_tuning_#{&1}"])})
+
+    %{
+      preset: params["poll_preset"],
+      tuning: tuning,
+      duration_hours: Types.maybe_to_integer(params["poll_duration_hours"], nil),
+      proposal_duration_hours:
+        Types.maybe_to_integer(params["poll_proposal_duration_hours"], nil),
+      multiple_choice: parse_bool(params["poll_multiple_choice"])
+    }
+  end
+
+  defp parse_bool("true"), do: true
+  defp parse_bool(true), do: true
+  defp parse_bool(_), do: false
+
+  # Composer's hidden inputs that aren't backend Question attrs (dropped before cast).
+  defp preset_form_keys do
+    base = ~w(poll_preset poll_duration_hours poll_proposal_duration_hours poll_multiple_choice)
+    base ++ Enum.map(Presets.tuning_keys(), &"poll_tuning_#{&1}")
+  end
 
   def negative_score_info do
     l("""
@@ -18,240 +49,251 @@ defmodule Bonfire.Poll.LiveHandler do
     """)
   end
 
-  # %{
-  #   "_csrf_token" => "Hmled3oGBDQXAyoGKC01bjguHQ5_FkwoqY-5-IvwZQd0mcM1aVTFOZaw",
-  #   "choice" => %{
-  #     "0" => %{"description" => "one", "name" => "1"},
-  #     "1" => %{
-  #       "description" => "Keep things the way they are.",
-  #       "name" => "Keep things the way they are."
-  #     }
-  #   },
-  #   "context_id" => "",
-  #   "create_object_type" => "poll",
-  #   "id" => "",
-  #   "name" => "",
-  #   "phase" => "full",
-  #   "post" => %{"post_content" => %{"html_body" => "text\n"}},
-  #   "question" => %{
-  #     "post_content" => %{"_persistent_id" => "0", "name" => "test poll"}
-  #   },
-  #   "reply_to" => %{"reply_to_id" => "", "thread_id" => ""},
-  #   "to_boundaries" => ["public"],
-  #   "weighting" => "1"
-  # }
+  # Composer form is `as: :post` (mirroring the post composer), so unwrap once.
   def handle_event("create_poll", %{"post" => post_params} = params, socket) do
     handle_event("create_poll", Map.merge(params, post_params) |> Map.drop(["post"]), socket)
   end
 
-  def handle_event("create_poll", %{"question" => question_params} = params, socket) do
-    handle_event(
-      "create_poll",
-      Map.merge(params, question_params) |> Map.drop(["question"]),
-      socket
-    )
-  end
-
   def handle_event("create_poll", params, socket) do
+    preset_params = preset_params_from_form(params)
+
     attrs =
       params
+      |> Map.drop(preset_form_keys())
       |> input_to_atoms(also_discard_unknown_nested_keys: false)
 
     current_user = current_user_required!(socket)
 
-    with %{valid?: true} <- Question.changeset(attrs),
-         #  uploaded_media <-
-         #    live_upload_files(
-         #      current_user,
-         #      params["upload_metadata"],
-         #      socket
-         #    ),
-         #  attrs <- Map.put(attrs, :uploaded_media, uploaded_media),
-         opts <-
+    # Reuse the post composer's audience/verb-grants plumbing.
+    {final_to_circles, verb_grants} =
+      maybe_apply(Bonfire.Posts.LiveHandler, :transform_circles_for_backend, [params],
+        fallback_return: {[], []}
+      )
+
+    # `to_boundaries` arrives as a list from the form, scalar from fixtures.
+    boundary =
+      case e(params, "to_boundaries", "mentions") do
+        [head | _] -> head
+        single -> single
+      end
+
+    with opts <-
            [
              current_user: current_user,
              question_attrs: attrs,
-             boundary: e(params, "to_boundaries", "mentions")
+             preset_params: preset_params,
+             boundary: boundary,
+             to_circles: final_to_circles,
+             verb_grants: verb_grants,
+             context_id: e(params, "context_id", nil)
            ]
-           |> debug("use opts for boundary + save field in PostContent"),
+           |> debug("create_poll opts"),
          {:ok, published} <- Questions.create(opts) do
-      published
-      |> repo().maybe_preload([:post_content])
-      |> debug("created!")
+      published =
+        published
+        |> repo().maybe_preload([:post_content])
+        |> debug("created!")
 
-      # activity = e(published, :activity, nil)
-
+      # No auto-redirect: the question's permalink is a generic Discussion
+      # thread that can't render polls. Offer a "Show" link in the flash instead.
       permalink = path(published)
-      # |> debug("permalink")
 
       {
         :noreply,
         socket
+        |> Bonfire.UI.Common.SmartInput.LiveHandler.reset_input()
         |> assign_flash(
           :info,
-          "#{l("Created!")}"
+          "<span>#{l("Posted!")}</span> <a href='#{permalink}' target='_top' class='ml-2 link link-hover font-semibold text-primary'>#{l("Show")} →</a>"
         )
-        |> Bonfire.UI.Common.SmartInput.LiveHandler.reset_input()
-        |> redirect_to(permalink)
       }
     else
       e ->
-        e = Errors.error_msg(e)
-        error(e)
+        error(e, "Could not create your poll")
 
         {
           :noreply,
           socket
-          |> assign_flash(:error, "Could not create 😢 (#{e})")
-          # |> patch_to(current_url(socket), fallback: "/error") # so the flash appears
+          |> Bonfire.UI.Common.SmartInput.LiveHandler.reset_input()
+          |> assign_error(l("Could not create your poll"))
         }
     end
   end
 
-  def handle_event("add_proposal", %{"name" => name, "description" => description}, socket) do
-    # Logic to handle adding a proposal goes here
-    {:noreply,
-     socket
-     |> assign(
-       :proposals,
-       assigns(socket)[:proposals] ++ [%{name: name, description: description}]
-     )}
+  # Composer state events (Layer 1/2/3, see .claude/DESIGN.md) — pushed via
+  # `send_update` so the dispatch site (LiveView vs container) doesn't matter.
+  @composer_id "smart_input_component"
+
+  def handle_event("select_preset", %{"preset" => "custom"}, socket) do
+    # Auto-expand Advanced so the user lands on the controls they came for.
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      selected_preset: :custom,
+      tuning_state: Presets.tuning_defaults(:custom),
+      advanced_open: true,
+      proposal_duration_hours: Presets.default_proposal_hours(),
+      weighting: 1,
+      multiple_choice: false
+    })
+
+    {:noreply, socket}
   end
 
-  def handle_event("add_proposal", _params, socket) do
-    # Logic to handle adding a proposal goes here
-    {:noreply,
-     socket
-     |> assign(:proposals, assigns(socket)[:proposals] ++ [%{}])}
+  def handle_event("select_preset", %{"preset" => preset_str}, socket) do
+    preset = Presets.get(preset_str)
+
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      selected_preset: preset.key,
+      tuning_state: preset.tuning_defaults,
+      duration_hours: preset.duration_hours,
+      proposal_duration_hours: Presets.default_proposal_hours(),
+      weighting: preset.weighting,
+      multiple_choice: false
+    })
+
+    {:noreply, socket}
   end
 
-  def handle_event("add_choices", params, socket) do
-    attrs =
-      params
-      |> Map.merge(e(params, "choices", %{}))
-      |> debug("section params")
-      |> input_to_atoms()
+  def handle_event("toggle_multiple", %{"current" => current_str}, socket) do
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      multiple_choice: !parse_bool(current_str)
+    })
 
-    # |> debug("post attrs")
+    {:noreply, socket}
+  end
 
-    # debug(e(assigns(socket), :showing_within, nil), "SHOWING")
+  def handle_event("toggle_tuning", %{"key" => key, "current" => current_str}, socket) do
+    # Component's `update/2` merges this partial into `tuning_state`.
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      merge_tuning: %{safe_tuning_key(key) => !parse_bool(current_str)}
+    })
 
-    page_id = e(attrs, :reply_to, :thread_id, nil)
+    {:noreply, socket}
+  end
 
-    # with  
-    #  uploaded_media <-
-    #    live_upload_files(
-    #      current_user,
-    #      params["upload_metadata"],
-    #      socket
-    #    ),
-    #  attrs <- Map.put(attrs, :uploaded_media, uploaded_media),
-    with opts <-
-           [
-             current_user: current_user_required!(socket),
-             choice_attrs: attrs,
-             boundary: e(params, "to_boundaries", "mentions"),
-             # to edit
-             question_id: e(params, "id", nil),
-             page_id: page_id
-           ]
-           |> debug("use opts for boundary + save fields in PostContent"),
-         {:ok, _published} <- Bonfire.Poll.Choices.upsert(opts) do
-      # published
-      # |> repo().maybe_preload([:post_content])
-      # |> dump("created!")
+  def handle_event("toggle_advanced", %{"current" => current_str}, socket) do
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      advanced_open: !parse_bool(current_str)
+    })
 
-      {
-        :noreply,
+    {:noreply, socket}
+  end
+
+  def handle_event("change_duration", %{"duration_hours" => hours}, socket) do
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      duration_hours: Types.maybe_to_integer(hours, 24)
+    })
+
+    {:noreply, socket}
+  end
+
+  def handle_event(
+        "change_proposal_duration",
+        %{"proposal_duration_hours" => hours},
         socket
-        |> assign_flash(
-          :info,
-          l("Choices saved!")
-        )
-        |> Bonfire.UI.Common.SmartInput.LiveHandler.reset_input()
-        # |> assign(reload: Text.unique_integer())
-        # current_url(socket), fallback: path(published))
-        # |> patch_to("/pages/edit/#{page_id}?reload=#{Text.unique_integer()}")
-      }
-    else
-      e ->
-        e = Errors.error_msg(e)
-        error(e)
+      ) do
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      proposal_duration_hours: Types.maybe_to_integer(hours, Presets.default_proposal_hours())
+    })
 
-        {
-          :noreply,
-          socket
-          |> assign_flash(:error, "Could not add choices 😢 (#{e})")
-          # |> patch_to(current_url(socket), fallback: "/error") # so the flash appears
-        }
+    {:noreply, socket}
+  end
+
+  def handle_event("add_option", %{"current" => current_str}, socket) do
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      visible_option_count: Types.maybe_to_integer(current_str, 2) + 1
+    })
+
+    {:noreply, socket}
+  end
+
+  def handle_event("remove_option", %{"current" => current_str}, socket) do
+    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
+      visible_option_count: max(Types.maybe_to_integer(current_str, 3) - 1, 2)
+    })
+
+    {:noreply, socket}
+  end
+
+  # Resolve a form-submitted tuning key string to its canonical atom without
+  # letting arbitrary atoms in via `String.to_atom/1`.
+  defp safe_tuning_key(key) do
+    keys = Presets.tuning_keys()
+    Enum.find(keys, List.first(keys), fn k -> Atom.to_string(k) == to_string(key) end)
+  end
+
+  def handle_event(
+        "submit_proposal",
+        %{"question_id" => question_id, "proposal" => %{"name" => name}},
+        socket
+      ) do
+    case Bonfire.Poll.Choices.add_proposal(
+           question_id,
+           %{name: name},
+           current_user: current_user(socket)
+         ) do
+      {:ok, _choice} ->
+        # `push_navigate` to the same URL forces the LV to re-fetch the
+        # question and pick up the newly-inserted choice.
+        socket =
+          case path_for_question(question_id) do
+            nil -> socket
+            path -> Phoenix.LiveView.push_navigate(socket, to: path)
+          end
+
+        {:noreply, assign_flash(socket, :info, l("Proposal added."))}
+
+      {:error, :proposal_phase_closed} ->
+        {:noreply, assign_error(socket, l("The proposal phase is not currently open."))}
+
+      {:error, :not_authorized} ->
+        {:noreply,
+         assign_error(socket, l("You don't have permission to suggest options for this poll."))}
+
+      {:error, :name_required} ->
+        {:noreply, assign_error(socket, l("Please enter the option text."))}
+
+      {:error, :unauthorized} ->
+        {:noreply, assign_error(socket, l("You need to sign in first."))}
+
+      {:error, :not_found} ->
+        {:noreply, assign_error(socket, l("Poll not found."))}
+
+      other ->
+        error(other, "submit_proposal failed")
+        {:noreply, assign_error(socket, l("Could not add proposal."))}
     end
   end
 
-  def handle_event("add_choice", %{"choice_id" => choice_id} = params, socket) do
-    question = e(assigns(socket), :object, nil) || e(params, "question_id", nil)
-
-    Bonfire.Poll.Choices.put_choice(uid!(choice_id), uid!(question))
-    |> debug("put_choice")
-
-    {
-      :noreply,
-      socket
-      |> assign_flash(
-        :info,
-        l("Added!")
-      )
-      |> assign(reload: Text.unique_integer())
-      # |> patch_to(current_url(socket), fallback: path(question))
-    }
-  end
-
-  def handle_event("remove_section", %{"choice_id" => choice_id} = params, socket) do
-    question = e(assigns(socket), :object, nil) || e(params, "question_id", nil)
-
-    Bonfire.Poll.Choices.remove_choice(uid!(choice_id), uid!(question))
-    |> debug("remove_choice")
-
-    {
-      :noreply,
-      socket
-      |> assign_flash(
-        :info,
-        l("Removed!")
-      )
-      # |> assign(reload: Text.unique_integer())
-      |> patch_to(current_url(socket), fallback: path(question))
-    }
-  end
-
-  def handle_event("submit_vote", %{"question_id" => question, "vote" => votes}, socket) do
-    # Ensure votes is a list of maps %{choice_id: ..., weight: ...}
-    # Handle single format where votes is just a choice_id string
-    votes =
-      case votes do
-        choice_id when is_binary(choice_id) ->
-          [%{choice_id: choice_id, weight: 1}]
-
-        votes when is_map(votes) ->
-          votes
-          |> Enum.map(fn
-            {choice_id, weight} when is_binary(choice_id) ->
-              %{choice_id: choice_id, weight: weight}
-
-            map = %{"choice_id" => choice_id, "weight" => weight} ->
-              %{choice_id: choice_id, weight: weight}
-
-            map = %{"choice_id" => choice_id} ->
-              %{choice_id: choice_id, weight: 1}
-
-            choice_id when is_binary(choice_id) ->
-              %{choice_id: choice_id, weight: 1}
-          end)
-      end
-
-    with {:ok, _result} <- Bonfire.Poll.Votes.vote(current_user(socket), question, votes) do
-      {:noreply,
-       socket
-       |> assign_flash(:info, l("Thanks for participating!"))}
+  def handle_event("submit_vote", %{"question_id" => question} = params, socket) do
+    with {:ok, _result} <-
+           Bonfire.Poll.Votes.vote(
+             current_user(socket),
+             question,
+             parse_votes(params)
+           ) do
+      {:noreply, assign_flash(socket, :info, l("Thanks for participating!"))}
     end
   end
+
+  @doc """
+  Map each rendered form shape to a `[%{choice_id, weight}]` list:
+
+    * weighted_multiple → `votes` indexed map `%{"N" => %{"choice_id"=>..., "weight"=>...}}`
+    * single → `vote` is a choice_id string
+    * multiple → `vote` is a `%{choice_id => "1"}` map
+  """
+  def parse_votes(%{"votes" => votes}) when is_map(votes) do
+    for {_idx, %{"choice_id" => cid} = entry} <- votes do
+      %{choice_id: cid, weight: entry["weight"] || 1}
+    end
+  end
+
+  def parse_votes(%{"vote" => choice_id}) when is_binary(choice_id),
+    do: [%{choice_id: choice_id, weight: 1}]
+
+  def parse_votes(%{"vote" => votes}) when is_map(votes) do
+    for {choice_id, weight} <- votes, do: %{choice_id: choice_id, weight: weight}
+  end
+
+  def parse_votes(_), do: []
 end

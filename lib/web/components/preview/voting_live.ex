@@ -1,12 +1,41 @@
 defmodule Bonfire.Poll.VotingLive do
   use Bonfire.UI.Common.Web, :stateless_component
 
+  alias Bonfire.Poll.Votes
+  alias Phoenix.LiveView.JS
+
   prop choice, :any, default: nil
   prop question, :any, default: nil
   prop voting_format, :string, default: nil
   prop selected, :any, default: nil
   prop readonly, :boolean, default: false
   prop scores, :list, default: nil
+  prop compact, :boolean, default: false
+  prop index, :integer, default: 0
 
   slot default
+
+  defdelegate score_color_class(score), to: Bonfire.Poll.Web.Preview.ChoiceLive
+
+  def scores_or_default(nil), do: Votes.scores()
+  def scores_or_default(scores), do: scores
+
+  # CSS-safe token for a sentiment score, used in element ids (no `-` or `∞`).
+  def score_key(-2), do: "neg2"
+  def score_key(-1), do: "neg1"
+  def score_key(0), do: "z"
+  def score_key(1), do: "p1"
+  def score_key(2), do: "p2"
+  def score_key("∞"), do: "veto"
+
+  @doc "phx-click chain that records the chosen weight + flips aria-checked on its siblings."
+  def choose_weight_js(fieldset_id, button_id, hidden_id, score) do
+    JS.set_attribute({"aria-checked", "false"}, to: "##{fieldset_id} button[role='radio']")
+    |> JS.set_attribute({"aria-checked", "true"}, to: "##{button_id}")
+    |> JS.set_attribute({"value", "#{score}"}, to: "##{hidden_id}")
+  end
+
+  def chosen_value(false), do: ""
+  def chosen_value(nil), do: ""
+  def chosen_value(value), do: to_string(value)
 end

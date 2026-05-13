@@ -1,62 +1,106 @@
-<div
-  data-id="activity_choice"
-  x-data="{expanded: false, expandable: $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight}"
-  data-rendered={@showing_within}
-  data-main-object={@viewing_main_object}
-  class=""
-  x-transition
-  x-ref="choice_container"
->
-  {!-- x-show={if @showing_within == :thread && !@viewing_main_object, do: "show_replies"} --}
-  {!-- id={"note-#{@activity_inception}-#{id(@activity) || id(@object) || "no-id"}-#{e(assigns, :viewing_main_object, false)}"} --}
+{#case voted_on?(@object)}
+  {#match voted_on}
+    <div
+      data-id="activity_choice"
+      data-role="choice-row"
+      data-rendered={@showing_within}
+      data-main-object={@viewing_main_object}
+      class={[
+        "choice-row relative",
+        "is-winner": @is_winner,
+        "is-vetoed": @is_vetoed
+      ]}
+      x-data="{ expanded: false, content_open: false }"
+    >
+      {#if @results_visible}
+        {#case percent(@vote_count, @total_votes)}
+          {#match pct}
+            <div class="relative overflow-hidden">
+              <div
+                aria-hidden="true"
+                class={[
+                  "absolute inset-y-0 left-0 ease-out transition-[width] duration-300",
+                  "bg-primary/15": @is_winner,
+                  "bg-base-content/[0.06]": !@is_winner and !@is_vetoed,
+                  "bg-error/[0.12]": @is_vetoed
+                ]}
+                style={"width: #{pct}%"}
+              />
 
-  {#if @voting_format == "weighted_multiple" or (!@vote and !e(@object, :object_voted, nil))}
-    <Bonfire.Poll.Web.Preview.ChoiceContentLive
-      question={@question}
-      object={@object}
-      viewing_main_object={@viewing_main_object}
-      showing_within={@showing_within}
-      is_remote={@is_remote}
-      hide_actions={@hide_actions}
-      voting_format={@voting_format}
-      vote={@vote}
-    />
-  {/if}
+              <div class="relative flex items-center gap-3 px-3 py-2.5">
+                <div class="flex items-start gap-2 min-w-0 flex-1">
+                  {#if @is_vetoed}
+                    <Iconify.iconify
+                      icon="ph:prohibit-bold"
+                      class="h-4 w-4 mt-0.5 text-error shrink-0"
+                      aria-label={l("Vetoed")}
+                    />
+                  {#elseif @is_winner}
+                    <Iconify.iconify
+                      icon="ph:check-bold"
+                      class="h-4 w-4 mt-0.5 text-primary shrink-0"
+                      aria-label={l("Winning option")}
+                    />
+                  {/if}
 
-  {#case e(@object, :object_voted, nil)}
-    {#match nil}
-      {#if @vote}
-        <Bonfire.Poll.VotingLive
-          voting_format={@voting_format}
-          question={@question}
-          choice={@object}
-          selected={false}
-        >
-          {#if @voting_format != "weighted_multiple"}
-            <Bonfire.Poll.Web.Preview.ChoiceContentLive
-              question={@question}
-              object={@object}
-              viewing_main_object={@viewing_main_object}
-              showing_within={@showing_within}
-              is_remote={@is_remote}
-              hide_actions={@hide_actions}
-              voting_format={@voting_format}
-              vote={@vote}
-            />
-          {/if}
-        </Bonfire.Poll.VotingLive>
-      {/if}
-    {#match votes}
-      <Bonfire.Poll.VotingLive
-        voting_format={@voting_format}
-        question={@question}
-        choice={@object}
-        selected={Bonfire.Poll.Votes.calculate_total(votes, @question)
-        |> Bonfire.Poll.Votes.calculate_average_base_score(length(votes)) || "∞"}
-        readonly={!@vote}
-      >
-        {#if @voting_format != "weighted_multiple"}
-          <Bonfire.Poll.Web.Preview.ChoiceContentLive
+                  <div class="min-w-0 flex-1">
+                    <ChoiceContentLive
+                      question={@question}
+                      object={@object}
+                      viewing_main_object={@viewing_main_object}
+                      showing_within={@showing_within}
+                      is_remote={@is_remote}
+                      hide_actions={@hide_actions}
+                      voting_format={@voting_format}
+                      vote={@vote}
+                      compact={@compact}
+                      is_winner={@is_winner}
+                    />
+
+                    {#if voted_on and @voting_format == "weighted_multiple"}
+                      {#case user_score(@object, @question)}
+                        {#match nil}
+                        {#match score}
+                          {#case score_label(score)}
+                            {#match nil}
+                            {#match {_v, name, icon, _desc}}
+                              <div
+                                class="mt-1 inline-flex items-center gap-1.5 text-xs"
+                                data-role="your-score"
+                                data-score={"#{score}"}
+                              >
+                                <span class="text-base-content/60">{l("Your vote:")}</span>
+                                <Iconify.iconify icon={icon} class={["h-4 w-4", score_color_class(score)]} />
+                                <span class={["font-medium", score_color_class(score)]}>{name}</span>
+                              </div>
+                          {/case}
+                      {/case}
+                    {#elseif voted_on}
+                      <div class="mt-0.5 inline-flex items-center gap-1 text-xs text-primary" data-role="your-vote">
+                        <Iconify.iconify icon="ph:check-circle-fill" class="h-3.5 w-3.5" />
+                        <span>{l("Your vote")}</span>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+
+                <div
+                  class={[
+                    "shrink-0 text-sm tabular-nums whitespace-nowrap",
+                    "font-semibold text-base-content": @is_winner,
+                    "text-base-content/70": !@is_winner
+                  ]}
+                  data-role="choice-stats"
+                >
+                  <span>{pct}%</span>
+                  <span class="text-base-content/50 ml-1">({@vote_count})</span>
+                </div>
+              </div>
+            </div>
+        {/case}
+      {#elseif @vote and not voted_on and @voting_format == "weighted_multiple"}
+        <div class="px-3 py-2.5">
+          <ChoiceContentLive
             question={@question}
             object={@object}
             viewing_main_object={@viewing_main_object}
@@ -65,24 +109,128 @@
             hide_actions={@hide_actions}
             voting_format={@voting_format}
             vote={@vote}
+            compact={@compact}
+            is_winner={false}
           />
-        {/if}
-      </Bonfire.Poll.VotingLive>
-  {/case}
-
-  {!-- Vote stats progress bar (shown when showResults is true) --}
-  {#if @vote and @voting_format != "weighted_multiple"}
-    <div x-show="showResults" x-cloak class="px-3 pb-2">
-      <div class="flex items-center gap-2">
-        <progress
-          class="progress progress-primary flex-1 h-2"
-          value={if @total_votes > 0, do: round(@vote_count * 100 / @total_votes), else: 0}
-          max="100"
+        </div>
+        <VotingLive
+          voting_format={@voting_format}
+          question={@question}
+          choice={@object}
+          index={@index}
+          selected={false}
+          compact={@compact}
         />
-        <span class="text-xs text-base-content/70 min-w-[80px] text-right">
-          {if @total_votes > 0, do: round(@vote_count * 100 / @total_votes), else: 0}% ({@vote_count})
-        </span>
-      </div>
+      {#elseif @vote and not voted_on}
+        <VotingLive
+          voting_format={@voting_format}
+          question={@question}
+          choice={@object}
+          index={@index}
+          selected={false}
+          compact={@compact}
+        >
+          <ChoiceContentLive
+            question={@question}
+            object={@object}
+            viewing_main_object={@viewing_main_object}
+            showing_within={@showing_within}
+            is_remote={@is_remote}
+            hide_actions={@hide_actions}
+            voting_format={@voting_format}
+            vote={@vote}
+            compact={@compact}
+            is_winner={false}
+          />
+        </VotingLive>
+      {#elseif voted_on and @voting_format == "weighted_multiple"}
+        <div class="flex items-start gap-2 px-3 py-2.5">
+          <div class="min-w-0 flex-1">
+            <ChoiceContentLive
+              question={@question}
+              object={@object}
+              viewing_main_object={@viewing_main_object}
+              showing_within={@showing_within}
+              is_remote={@is_remote}
+              hide_actions={@hide_actions}
+              voting_format={@voting_format}
+              vote={@vote}
+              compact={@compact}
+              is_winner={false}
+            />
+            {#case user_score(@object, @question)}
+              {#match nil}
+              {#match score}
+                {#case score_label(score)}
+                  {#match nil}
+                  {#match {_v, name, icon, _desc}}
+                    <div
+                      class="mt-1 inline-flex items-center gap-1.5 text-xs"
+                      data-role="your-score"
+                      data-score={"#{score}"}
+                    >
+                      <span class="text-base-content/60">{l("Your vote:")}</span>
+                      <Iconify.iconify icon={icon} class={["h-4 w-4", score_color_class(score)]} />
+                      <span class={["font-medium", score_color_class(score)]}>{name}</span>
+                    </div>
+                {/case}
+            {/case}
+          </div>
+        </div>
+      {#elseif voted_on}
+        <div class="flex items-center gap-3 px-3 py-2.5">
+          <Iconify.iconify
+            icon="ph:check-circle-fill"
+            class="h-4 w-4 text-primary shrink-0"
+            aria-label={l("Your vote")}
+          />
+          <div class="min-w-0 flex-1">
+            <ChoiceContentLive
+              question={@question}
+              object={@object}
+              viewing_main_object={@viewing_main_object}
+              showing_within={@showing_within}
+              is_remote={@is_remote}
+              hide_actions={@hide_actions}
+              voting_format={@voting_format}
+              vote={@vote}
+              compact={@compact}
+              is_winner={false}
+            />
+          </div>
+        </div>
+      {#else}
+        <div class="px-3 py-2.5">
+          <ChoiceContentLive
+            question={@question}
+            object={@object}
+            viewing_main_object={@viewing_main_object}
+            showing_within={@showing_within}
+            is_remote={@is_remote}
+            hide_actions={@hide_actions}
+            voting_format={@voting_format}
+            vote={@vote}
+            compact={@compact}
+            is_winner={@is_winner}
+          />
+          {#if @show_author}
+            {#case proposer_name(@object)}
+              {#match nil}
+              {#match author}
+                {#case proposer_username(@object)}
+                  {#match nil}
+                    <div class="mt-1 text-xs text-base-content/60" data-role="proposer">
+                      {l("Suggested by %{name}", name: author)}
+                    </div>
+                  {#match username}
+                    <div class="mt-1 text-xs text-base-content/60" data-role="proposer">
+                      {l("Suggested by")}
+                      <a href={"/@" <> username} class="link link-hover text-base-content/75 hover:text-base-content">@{username}</a>
+                    </div>
+                {/case}
+            {/case}
+          {/if}
+        </div>
+      {/if}
     </div>
-  {/if}
-</div>
+{/case}

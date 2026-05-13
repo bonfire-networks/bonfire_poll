@@ -1,17 +1,17 @@
 defmodule Bonfire.Poll.Question.Create do
   @moduledoc """
-  Creates a changeset for publishing a page
+  Builds the initial `Bonfire.Poll.Question` changeset for the poll-creation
+  epic and registers it for insertion via `Bonfire.Ecto.Acts.Work`.
 
   Epic Options:
-    * `:current_user` - user that will create the page, required.
-    * `:page_attrs` (configurable) - attrs to create the page from, required.
-    * `:page_id` (configurable) - id to use for the created page (handy for creating
-      activitypub objects with an id representing their reported creation time)
+    * `:current_user` — user that will create the question, required.
+    * `:question_attrs` (configurable) — attrs to create the question from,
+      required.
 
   Act Options:
-    * `:id` - epic options key to find an id to force override with at, default: `:page_id`
-    * `:as` - key to assign changeset to, default: `:page`.
-    * `:attrs` - epic options key to find the attributes at, default: `:page_attrs`.
+    * `:as` — key to assign the changeset to, default: `:question`.
+    * `:attrs` — epic options key to find the attributes at,
+      default: `:question_attrs`.
   """
 
   alias Bonfire.Ecto.Acts.Work

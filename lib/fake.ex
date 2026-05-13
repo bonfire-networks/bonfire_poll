@@ -1,10 +1,13 @@
 defmodule Bonfire.Poll.Fake do
   def fake_question(attrs \\ %{}, opts \\ []) do
+    # Voting-only default; tests wanting proposal phase pass `:proposal_dates`.
     default = %{
       post_content: %{name: Faker.Lorem.sentence()},
       voting_format: "single",
-      proposal_dates: [DateTime.utc_now()],
-      voting_dates: [DateTime.utc_now() |> DateTime.add(3600, :second)]
+      voting_dates: [
+        DateTime.utc_now(),
+        DateTime.utc_now() |> DateTime.add(3600, :second)
+      ]
     }
 
     opts =

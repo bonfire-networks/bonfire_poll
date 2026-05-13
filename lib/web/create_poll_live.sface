@@ -1,115 +1,207 @@
-<div class="flex flex-col h-full write_post_content">
+<div class="write_post_content flex flex-col flex-1 min-h-0">
   <Form
     for={%{}}
-    as={:question}
+    as={:post}
     submit="Bonfire.Poll:create_poll"
     action="Bonfire.Poll:create_poll"
+    change="Bonfire.UI.Common.SmartInput:validate"
     opts={
       autocomplete: "off",
       "phx-target": "#smart_input"
     }
-    class={if WriteEditorLive.use_rich_editor?(e(@smart_input_opts, :wysiwyg, true), @__context__),
-      do: "with_editor flex-1",
-      else: "with_textarea flex-1"}
+    class="with_editor flex flex-col flex-1 min-h-0"
   >
-    <div class={
-      "bg-base-100 flex h-full flex-1": @thread_mode != :flat,
-      "bg-base-100 border-t border-base-content/10 p-3 h-full flex-1 sticky bottom-0 messages_smart_input":
-        @thread_mode == :flat,
-      "!border-0": @showing_within == :compose,
-      "!relative border-none !h-auto !relative": @showing_within == :page
-    }>
-      <div class={
-        "relative flex flex-col flex-1 h-full",
-        "h-auto": @showing_within == :compose
-      }>
-        <Bonfire.UI.Common.InputControlsLive
-          smart_input_opts={@smart_input_opts}
-          thread_mode={@thread_mode}
-          reply_to_id={uid(@reply_to_id)}
-          context_id={@context_id}
-          create_object_type={@create_object_type}
-          to_boundaries={@to_boundaries}
-          to_circles={@to_circles}
-          exclude_circles={@exclude_circles}
-          showing_within={@showing_within}
-          uploads={false}
-          uploaded_files={@uploaded_files}
-          submit_label={l("Create")}
-        >
-          <Inputs for={:post_content}>
-            <!-- <div x-show="!open_boundaries" class="flex-1"> -->
-            <div class="flex-1">
-              <!-- <div display="style: none" x-show="title_open" x-transition> -->
-              <div>
-                <label for="title" class="sr-only">{l("Title")}</label>
-                <Field name={:name}>
-                  <TextInput
-                    opts={
-                      placeholder: l("Enter a title")
-                    }
-                    class={
-                      "block w-full border-0 p-2 placeholder-base-content/70 bg-base-100 text-base-content border-b border-base-content/10",
-                      "!border !border-base-content/30 rounded-lg mb-2": e(@thread_mode, nil) == :flat
-                    }
-                  />
-                </Field>
-              </div>
-              <label for="description" class="sr-only">{l("Description")}</label>
-              <Field name={:html_body}>
-                <div class={@textarea_container_class} :class={@textarea_container_class_alpine}>
-                  <WriteEditorLive
-                    field_name="question[post_content][html_body]"
-                    textarea_class={@textarea_class}
-                    smart_input_opts={@smart_input_opts
-                    |> Map.put(
-                      :prompt,
-                      l(
-                        "Enter a plain text summary for the page (useful for showing in page lists, and for search engines)..."
-                      )
-                    )}
-                    insert_text={@insert_text}
-                    thread_mode={@thread_mode}
-                    showing_within={@showing_within}
-                    advanced_mode
-                  />
-                </div>
-              </Field>
+    {!-- Composer state rides along as hidden inputs for the create_poll handler. --}
+    <input type="hidden" name="poll_preset" value={to_string(@selected_preset)}>
+    <input type="hidden" name="poll_duration_hours" value={@duration_hours}>
+    <input type="hidden" name="poll_proposal_duration_hours" value={@proposal_duration_hours}>
+    <input
+      type="hidden"
+      name="poll_multiple_choice"
+      value={if @multiple_choice, do: "true", else: "false"}
+    />
+    <input
+      :for={key <- Presets.tuning_keys()}
+      type="hidden"
+      name={"poll_tuning_#{key}"}
+      value={if @tuning_state[key], do: "true", else: "false"}
+    />
 
-              <div id="scrollTopicQuestion" />
-              <div class="flex flex-col p-3 border-t border-base-content/10">
-                <div class="py-2 hidden">
-                  # TODO
-                  <div class="flex justify-between items-center flex-wrap">
-                    <div class="fullOnly">
-                      <h1>{l("question.timeLeftHeading")}</h1>
-                    </div>
-                    <div class="voteOnly">
-                      <h1>{l("question.timeLeftVotingHeading")}</h1>
-                    </div>
-                  </div>
-                  <div class="fullOnly">
-                    #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "proposal")
-                    <p />
-                  </div>
-                  #live_render(@socket, Bonfire.Poll.TimeSelector, phase: "voting")
-                </div>
-                <div class="voteOnly divide-y divide-base-content/10 flex flex-col gap-2">
-                  <!-- <h2 class="text-l">{l("Proposals")}</h2> -->
-                  {#for {proposal, index} <- Enum.with_index(@proposals)}
-                    <Bonfire.Poll.EditProposalLive proposal={proposal} index={index} />
-                  {/for}
-                </div>
-                <div class="flex gap-3 items-center">
-                  <WeightSelector />
-                  <PhaseSelector />
-                </div>
-                <Bonfire.Poll.AddProposal event_target={@myself} />
+    <Bonfire.UI.Common.InputControlsLive
+      smart_input_opts={@smart_input_opts}
+      thread_mode={@thread_mode}
+      reply_to_id={uid(@reply_to_id)}
+      context_id={@context_id}
+      create_object_type={@create_object_type}
+      to_boundaries={@to_boundaries}
+      to_circles={@to_circles}
+      exclude_circles={@exclude_circles}
+      showing_within={@showing_within}
+      uploads={false}
+      uploaded_files={@uploaded_files}
+      submit_label={l("Post poll")}
+    >
+      <div class="flex flex-col gap-4 px-3 py-3">
+        <Inputs for={:post_content}>
+          <Field name={:html_body}>
+            <div class="flex flex-col gap-1.5">
+              <label for="poll_question" class="text-sm font-semibold text-base-content">
+                {l("Your question")}
+              </label>
+              {!-- phx-update=ignore preserves the typed value across morphdom passes. --}
+              <div id="poll_question_wrapper" phx-update="ignore">
+                <TextInput
+                  id="poll_question"
+                  opts={placeholder: l("What are we deciding?")}
+                  class="block w-full rounded-md border border-base-content/20 bg-base-100 px-3 py-2.5 text-base text-base-content placeholder:text-base-content/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
+                />
               </div>
             </div>
-          </Inputs>
-        </Bonfire.UI.Common.InputControlsLive>
+          </Field>
+        </Inputs>
+
+        <section aria-labelledby="poll_options_heading" class="flex flex-col gap-1.5">
+          <h3 id="poll_options_heading" class="text-sm font-semibold text-base-content">
+            {l("Options")}
+          </h3>
+          <div class="flex flex-col gap-2">
+            {#for index <- 0..(@visible_option_count - 1)}
+              <Bonfire.Poll.EditProposalLive
+                proposal={Enum.at(@proposals || [], index, %{})}
+                index={index}
+                visible_option_count={@visible_option_count}
+                event_target="#smart_input"
+              />
+            {/for}
+          </div>
+          <button
+            type="button"
+            data-role="add-proposal-button"
+            phx-click="Bonfire.Poll:add_option"
+            phx-value-current={@visible_option_count}
+            phx-target="#smart_input"
+            class="self-start inline-flex items-center gap-2 rounded-md border border-base-content/20 bg-base-100 px-3 py-2 min-h-[44px] text-sm font-medium text-base-content hover:bg-base-content/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+          >
+            <#Icon iconify="ph:plus" class="h-4 w-4" />
+            <span>{l("Add option")}</span>
+          </button>
+        </section>
+
+        <section class="flex flex-col gap-2" aria-label={l("Poll behaviour")}>
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {#if @tuning_state[:proposal_phase]}
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-2 min-h-[44px]">
+                <label class="flex items-center gap-2 whitespace-nowrap">
+                  <span class="text-sm text-base-content">{l("Proposals open")}</span>
+                  <select
+                    name="proposal_duration_hours"
+                    data-role="poll-proposal-duration"
+                    phx-change="Bonfire.Poll:change_proposal_duration"
+                    phx-target="#smart_input"
+                    class="select select-sm select-bordered min-w-[7rem]"
+                  >
+                    <option value="6" selected={@proposal_duration_hours == 6}>{l("6 hours")}</option>
+                    <option value="24" selected={@proposal_duration_hours == 24}>{l("1 day")}</option>
+                    <option value="72" selected={@proposal_duration_hours == 72}>{l("3 days")}</option>
+                    <option value="168" selected={@proposal_duration_hours == 168}>{l("1 week")}</option>
+                  </select>
+                </label>
+
+                <Iconify.iconify icon="ph:arrow-right" class="h-4 w-4 text-base-content/40" aria-hidden="true" />
+
+                <label class="flex items-center gap-2 whitespace-nowrap">
+                  <span class="text-sm text-base-content">{l("Then voting")}</span>
+                  <select
+                    name="duration_hours"
+                    data-role="poll-duration"
+                    phx-change="Bonfire.Poll:change_duration"
+                    phx-target="#smart_input"
+                    class="select select-sm select-bordered min-w-[7rem]"
+                  >
+                    <option value="1" selected={@duration_hours == 1}>{l("1 hour")}</option>
+                    <option value="6" selected={@duration_hours == 6}>{l("6 hours")}</option>
+                    <option value="24" selected={@duration_hours == 24}>{l("1 day")}</option>
+                    <option value="72" selected={@duration_hours == 72}>{l("3 days")}</option>
+                    <option value="168" selected={@duration_hours == 168}>{l("1 week")}</option>
+                  </select>
+                </label>
+              </div>
+            {#else}
+              <label class="flex items-center gap-2 min-h-[44px] whitespace-nowrap">
+                <span class="text-sm text-base-content">{l("Closes in")}</span>
+                <select
+                  name="duration_hours"
+                  data-role="poll-duration"
+                  phx-change="Bonfire.Poll:change_duration"
+                  phx-target="#smart_input"
+                  class="select select-sm select-bordered min-w-[7rem]"
+                >
+                  <option value="1" selected={@duration_hours == 1}>{l("1 hour")}</option>
+                  <option value="6" selected={@duration_hours == 6}>{l("6 hours")}</option>
+                  <option value="24" selected={@duration_hours == 24}>{l("1 day")}</option>
+                  <option value="72" selected={@duration_hours == 72}>{l("3 days")}</option>
+                  <option value="168" selected={@duration_hours == 168}>{l("1 week")}</option>
+                </select>
+              </label>
+            {/if}
+
+            <label
+              :if={Presets.shows_multiple_choice?(@selected_preset)}
+              class="inline-flex items-center gap-2 cursor-pointer min-h-[44px] text-sm text-base-content whitespace-nowrap"
+            >
+              <input
+                type="checkbox"
+                class="toggle toggle-primary"
+                data-role="poll-multiple-choice"
+                checked={@multiple_choice}
+                phx-click="Bonfire.Poll:toggle_multiple"
+                phx-value-current={if @multiple_choice, do: "true", else: "false"}
+                phx-target="#smart_input"
+              />
+              {l("Multiple choice")}
+            </label>
+          </div>
+
+          <Bonfire.Poll.PollStylePickerLive
+            selected_preset={@selected_preset}
+            event_target="#smart_input"
+          />
+
+          <Bonfire.Poll.TuningTogglesLive
+            selected_preset={@selected_preset}
+            tuning_state={@tuning_state}
+            event_target="#smart_input"
+          />
+        </section>
+
+        <section class="rounded-md border border-base-content/15 bg-base-content/[0.03]">
+          <button
+            type="button"
+            data-role="poll-advanced-toggle"
+            phx-click="Bonfire.Poll:toggle_advanced"
+            phx-value-current={if @advanced_open, do: "true", else: "false"}
+            phx-target="#smart_input"
+            aria-expanded={if @advanced_open, do: "true", else: "false"}
+            class="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-3 min-h-[44px] text-sm font-medium text-base-content/80 hover:bg-base-content/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-md"
+          >
+            <span class="flex items-center gap-2">
+              <#Icon iconify="ph:sliders-horizontal-duotone" class="h-4 w-4" />
+              {l("Advanced")}
+            </span>
+            <#Icon
+              iconify="ph:caret-down-duotone"
+              class={
+                "h-3 w-3 transition-transform",
+                "rotate-180": @advanced_open
+              }
+            />
+          </button>
+          <div :if={@advanced_open} class="flex flex-col gap-3 border-t border-base-content/10 p-3">
+            <WeightSelector weighting={@weighting} />
+            {!-- TODO: phase dates picker, per-circle voting rights --}
+          </div>
+        </section>
       </div>
-    </div>
+    </Bonfire.UI.Common.InputControlsLive>
   </Form>
 </div>
