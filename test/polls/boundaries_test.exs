@@ -146,6 +146,7 @@ defmodule Bonfire.Poll.BoundariesTest do
       [choice | _] = poll.choices
 
       result = Votes.vote(outsider, poll.id, [%{choice_id: choice.id, weight: 1}])
+
       assert match?({:error, _}, result) or is_nil(result) or result == :error,
              "expected an error result, got: #{inspect(result)}"
     end
@@ -189,6 +190,7 @@ defmodule Bonfire.Poll.BoundariesTest do
       refute Boundaries.can?(outsider, :vote, poll)
 
       result = Votes.vote(outsider, poll.id, [%{choice_id: choice.id, weight: 1}])
+
       assert match?({:error, _}, result) or is_nil(result) or result == :error,
              "outsider should be refused, got: #{inspect(result)}"
     end
