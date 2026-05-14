@@ -25,6 +25,9 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   prop is_vetoed, :boolean, default: false
   prop closed, :boolean, default: false
   prop show_author, :boolean, default: false
+  # Renders a disabled radio slot on the left as a visual preview of where
+  # the vote control will land once the proposal phase closes.
+  prop proposal_phase, :boolean, default: false
   prop index, :integer, default: 0
   prop compact, :boolean, default: false
 

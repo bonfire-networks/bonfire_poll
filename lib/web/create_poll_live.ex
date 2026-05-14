@@ -5,7 +5,7 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   alias Surface.Components.Form.TextInput
   alias Surface.Components.Form.Field
   alias Surface.Components.Form.Inputs
-  alias Bonfire.Poll.{Presets, WeightSelector}
+  alias Bonfire.Poll.Presets
 
   prop proposals, :list, default: []
 
@@ -35,12 +35,10 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
     default: %{proposal_phase: false, hide_results: false, allow_vetoes: false}
 
   data duration_hours, :integer, default: 24
-  # Mirrors the active preset's weighting so the Advanced selector's default
-  # matches what would be persisted. Otherwise the form silently overrides
-  # the preset via `Bonfire.Poll.Acts.PresetAttrs`'s form-wins merge.
+  # Mirrors the active preset's weighting so the form's submitted value
+  # doesn't silently override the preset via PresetAttrs's form-wins merge.
   data weighting, :integer, default: 1
   data proposal_duration_hours, :integer, default: 24
-  data advanced_open, :boolean, default: false
   data visible_option_count, :integer, default: 2
   data multiple_choice, :boolean, default: false
 

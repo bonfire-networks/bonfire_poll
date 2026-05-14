@@ -29,23 +29,33 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   end
 
   @doc "Pre-compute every value the template branches read, so the .sface stays flat."
-  def view_state(question) do
+  def view_state(question, is_remote \\ false) do
     choices = e(question, :choices, []) || []
-    remote_stats = remote_poll_stats(question)
+    remote_stats = if is_remote, do: remote_poll_stats(question), else: empty_remote_stats()
     end_time = end_time(question, remote_stats)
+    counts = Enum.map(choices, &choice_vote_count(&1, remote_stats))
+    counts_by_choice_id = choices |> Enum.zip(counts) |> Map.new(fn {c, n} -> {id(c), n} end)
+    total_votes = max(Enum.sum(counts), remote_stats.total_votes)
 
     %{
       choices: choices,
       has_voted: voted?(choices),
-      remote_stats: remote_stats,
+      counts_by_choice_id: counts_by_choice_id,
       end_time: end_time,
       closed: closed?(end_time),
       locked: results_locked?(question, end_time),
-      winning_ids: winning_choice_ids(choices),
+      winning_ids: winning_choice_ids(choices, &Map.get(counts_by_choice_id, id(&1), 0)),
       voting_format: e(question, :voting_format, nil) || Questions.default_voting_format(),
-      total_votes: max(total_votes(choices), remote_stats.total_votes)
+      total_votes: total_votes,
+      proposal_open: Questions.proposal_open?(question),
+      time_remaining_label: time_remaining(end_time),
+      proposal_end_label: time_remaining(List.last(e(question, :proposal_dates, []))),
+      question_without_choices: Map.drop(question, [:choices])
     }
   end
+
+  defp empty_remote_stats,
+    do: %{voters_count: 0, total_votes: 0, choice_counts: %{}, end_time: nil}
 
   @doc "Vote count for a choice, taking the higher of local and remote-stats counts."
   def choice_vote_count(choice, remote_stats \\ %{})
@@ -63,12 +73,6 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
       _ -> 0
     end
   end
-
-  @doc "Sum of per-choice vote counts."
-  def total_votes(choices) when is_list(choices),
-    do: choices |> Enum.map(&choice_vote_count/1) |> Enum.sum()
-
-  def total_votes(_), do: 0
 
   @doc "Get remote poll stats from cached AP object"
   def remote_poll_stats(question) do
@@ -200,12 +204,23 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
         diff = DateTime.diff(end_time, now, :second)
 
         cond do
-          diff < 3600 -> l("%{count} minutes left", count: div(diff, 60))
-          diff < 86400 -> l("%{count} hours left", count: div(diff, 3600))
-          true -> l("%{count} days left", count: div(diff, 86400))
+          diff < 3600 ->
+            n = div(diff, 60)
+            lp("1 minute left", "%{count} minutes left", n, count: n)
+
+          diff < 86400 ->
+            n = div(diff, 3600)
+            lp("1 hour left", "%{count} hours left", n, count: n)
+
+          true ->
+            n = div(diff, 86400)
+            lp("1 day left", "%{count} days left", n, count: n)
         end
     end
   end
 
   def time_remaining(_), do: nil
+
+  @doc "Localised, singular-aware vote count: `1 vote` / `N votes`."
+  def pluralize_votes(n), do: lp("1 vote", "%{count} votes", n, count: n)
 end

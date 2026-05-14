@@ -177,6 +177,92 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     |> assert_has_or_open_browser(~s|button[role=radio][data-score='2']|)
   end
 
+  test "vote control DOM ids are scoped per choice (no collisions across polls)" do
+    # Regression: vote-input / vote-btn / vote-weight ids used to be keyed
+    # by the per-poll choice index. Two polls in the feed would then both
+    # emit `vote-input-0`, `vote-input-1`, … and the browser console
+    # would spew "Multiple IDs detected". Scoping by choice ULID fixes it.
+    account = Fake.fake_account!()
+    user = Fake.fake_user!(account)
+    conn = conn(user: user, account: account)
+
+    {:ok, q1} =
+      fake_question_with_choices(
+        %{
+          post_content: %{html_body: "First poll"},
+          voting_format: "weighted_multiple"
+        },
+        [%{name: "a"}, %{name: "b"}],
+        current_user: user,
+        boundary: "public"
+      )
+
+    {:ok, q2} =
+      fake_question_with_choices(
+        %{
+          post_content: %{html_body: "Second poll"},
+          voting_format: "weighted_multiple"
+        },
+        [%{name: "c"}, %{name: "d"}],
+        current_user: user,
+        boundary: "public"
+      )
+
+    # Each choice has its own ULID; ids must include those, not the index.
+    [c1a, c1b] = q1.choices |> Enum.sort_by(& &1.id)
+    [c2a, c2b] = q2.choices |> Enum.sort_by(& &1.id)
+
+    conn
+    |> visit("/feed")
+    |> wait_async()
+    |> assert_has_or_open_browser(~s|#vote-input-#{c1a.id}|)
+    |> assert_has_or_open_browser(~s|#vote-input-#{c1b.id}|)
+    |> assert_has_or_open_browser(~s|#vote-input-#{c2a.id}|)
+    |> assert_has_or_open_browser(~s|#vote-input-#{c2b.id}|)
+    # And the legacy `vote-input-0` collision is gone.
+    |> refute_has("#vote-input-0")
+    |> refute_has("#vote-input-1")
+  end
+
+  test "once the proposal phase ends, the voting UI takes over" do
+    # Regression: the render branch used to gate on `proposal_dates != []`
+    # which is true forever once set, so polls past their proposal-phase
+    # deadline stayed stuck in the propose-only UI and voting was impossible.
+    # We now gate on `Questions.proposal_open?/1` so the voting branch
+    # activates as soon as the proposal phase ends.
+    account = Fake.fake_account!()
+    user = Fake.fake_user!(account)
+    conn = conn(user: user, account: account)
+
+    now = DateTime.utc_now()
+    proposal_start = DateTime.add(now, -7200, :second)
+    proposal_end = DateTime.add(now, -3600, :second)
+    voting_end = DateTime.add(now, 3600, :second)
+
+    {:ok, question} =
+      fake_question_with_choices(
+        %{
+          post_content: %{html_body: "Voting now open"},
+          voting_format: "weighted_multiple",
+          proposal_dates: [proposal_start, proposal_end],
+          voting_dates: [proposal_end, voting_end]
+        },
+        [%{name: "alpha"}, %{name: "beta"}],
+        current_user: user,
+        boundary: "public"
+      )
+
+    conn
+    |> visit("/discussion/#{question.id}")
+    |> wait_async()
+    # Voting controls + Submit are present.
+    |> assert_has_or_open_browser("[data-role=submit-vote]", text: "Submit votes")
+    |> assert_has_or_open_browser(~s|button[role=radio][data-score='2']|)
+    # Proposal-phase artifacts are gone (suggest form, proposal-vote-slot preview).
+    |> refute_has("[data-role=propose-form]")
+    |> refute_has("[data-role=proposal-vote-slot]")
+  end
+
   test "submitting a suggestion adds it to the proposal-phase listing" do
     account = Fake.fake_account!()
     author = Fake.fake_user!(account)

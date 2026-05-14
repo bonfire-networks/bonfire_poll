@@ -1,29 +1,135 @@
 <section
-  :if={visible_toggles(@selected_preset) != []}
-  aria-label={l("Poll behaviour")}
-  class="flex flex-col gap-3"
+  aria-label={l("Poll settings")}
+  data-role="poll-tuning-panel"
+  class="rounded-md border border-base-content/10 bg-base-100"
 >
-  <label
-    :for={key <- visible_toggles(@selected_preset)}
-    class="flex items-start justify-between gap-3 cursor-pointer min-h-[44px]"
-  >
-    <span class="flex flex-col">
-      <span class="text-sm font-medium text-base-content">
-        {toggle_label(key)}
-      </span>
-      <span class="text-xs text-base-content/60">
-        {toggle_hint(key)}
-      </span>
-    </span>
-    <input
-      type="checkbox"
-      class="toggle toggle-primary mt-0.5 shrink-0"
-      data-role={"tuning-#{key}"}
-      checked={@tuning_state[key]}
-      phx-click="Bonfire.Poll:toggle_tuning"
-      phx-value-key={key}
-      phx-value-current={if @tuning_state[key], do: "true", else: "false"}
-      phx-target={@event_target}
-    />
-  </label>
+  <ul class="divide-y divide-base-content/8">
+    {!-- Duration row. Single-phase by default; two-phase when proposal_phase is on. --}
+    <li class="flex items-start justify-between gap-3 px-3 py-3 flex-wrap">
+      <div class="flex flex-col gap-0.5 min-w-0">
+        <span class="text-sm font-medium text-base-content">
+          {if @tuning_state[:proposal_phase], do: l("Phases"), else: l("Duration")}
+        </span>
+        <span class="text-xs text-base-content/60">
+          {if @tuning_state[:proposal_phase],
+            do: l("Suggestions first, then a scored vote."),
+            else: l("How long the vote stays open.")}
+        </span>
+      </div>
+      <div class="shrink-0">
+        {#if @tuning_state[:proposal_phase]}
+          {!-- No inner labels: the row header ("Phases — Suggestions first, then
+               a scored vote.") and the arrow already establish the order. --}
+          <div class="flex items-center gap-1.5">
+            <select
+              name="proposal_duration_hours"
+              data-role="poll-proposal-duration"
+              aria-label={l("Suggestion phase duration")}
+              phx-change="Bonfire.Poll:change_proposal_duration"
+              phx-target={@event_target}
+              class="select select-sm select-bordered min-w-[6rem]"
+            >
+              {#for {hours, label} <- duration_options()}
+                <option value={hours} selected={@proposal_duration_hours == hours}>{label}</option>
+              {/for}
+            </select>
+            <Iconify.iconify
+              icon="ph:arrow-right"
+              class="h-3.5 w-3.5 text-base-content/40 shrink-0"
+              aria-hidden="true"
+            />
+            <select
+              name="duration_hours"
+              data-role="poll-duration"
+              aria-label={l("Voting phase duration")}
+              phx-change="Bonfire.Poll:change_duration"
+              phx-target={@event_target}
+              class="select select-sm select-bordered min-w-[6rem]"
+            >
+              {#for {hours, label} <- duration_options()}
+                <option value={hours} selected={@duration_hours == hours}>{label}</option>
+              {/for}
+            </select>
+          </div>
+        {#else}
+          <select
+            name="duration_hours"
+            data-role="poll-duration"
+            phx-change="Bonfire.Poll:change_duration"
+            phx-target={@event_target}
+            class="select select-sm select-bordered min-w-[7rem]"
+          >
+            {#for {hours, label} <- duration_options()}
+              <option value={hours} selected={@duration_hours == hours}>{label}</option>
+            {/for}
+          </select>
+        {/if}
+      </div>
+    </li>
+
+    {!-- Multiple-choice row (Quick poll only). --}
+    {#if shows_multiple_choice?(@selected_preset)}
+      <li class="flex items-start justify-between gap-3 px-3 py-3">
+        <div class="flex flex-col gap-0.5 min-w-0">
+          <span class="text-sm font-medium text-base-content">{l("Multiple choice")}</span>
+          <span class="text-xs text-base-content/60">
+            {l("Voters can pick more than one option.")}
+          </span>
+        </div>
+        <input
+          type="checkbox"
+          class="toggle toggle-primary mt-0.5 shrink-0"
+          data-role="poll-multiple-choice"
+          checked={@multiple_choice}
+          phx-click="Bonfire.Poll:toggle_multiple"
+          phx-value-current={if @multiple_choice, do: "true", else: "false"}
+          phx-target={@event_target}
+        />
+      </li>
+    {/if}
+
+    {!-- Behaviour toggles, filtered to those meaningful for the active style. --}
+    <li
+      :for={key <- visible_toggles(@selected_preset)}
+      class="flex items-start justify-between gap-3 px-3 py-3"
+    >
+      <div class="flex flex-col gap-0.5 min-w-0">
+        <span class="text-sm font-medium text-base-content">{toggle_label(key)}</span>
+        <span class="text-xs text-base-content/60">{toggle_hint(key)}</span>
+      </div>
+      <input
+        type="checkbox"
+        class="toggle toggle-primary mt-0.5 shrink-0"
+        data-role={"tuning-#{key}"}
+        checked={@tuning_state[key]}
+        phx-click="Bonfire.Poll:toggle_tuning"
+        phx-value-key={key}
+        phx-value-current={if @tuning_state[key], do: "true", else: "false"}
+        phx-target={@event_target}
+      />
+    </li>
+
+    {!-- Objection weight (weighted styles only). Lives here, not in a separate
+         Advanced panel: with one control the layering was ceremony. --}
+    {#if shows_weighting?(@selected_preset)}
+      <li class="flex items-start justify-between gap-3 px-3 py-3 flex-wrap">
+        <div class="flex flex-col gap-0.5 min-w-0">
+          <span class="text-sm font-medium text-base-content">{l("How much objections weigh")}</span>
+          <span class="text-xs text-base-content/60">
+            {l("Make a 'concerned' or 'disagree' vote count for more than a 'great' vote.")}
+          </span>
+        </div>
+        <select
+          id="poll_weighting"
+          name="weighting"
+          data-role="poll-weighting"
+          class="select select-sm select-bordered min-w-[12rem] shrink-0"
+        >
+          {#for {value, label} <- objection_weight_options()}
+            <option value={value} selected={@weighting == value}>{label}</option>
+          {/for}
+        </select>
+      </li>
+    {/if}
+  </ul>
 </section>

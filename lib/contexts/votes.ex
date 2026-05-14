@@ -25,19 +25,14 @@ defmodule Bonfire.Poll.Votes do
   # TODO: configurable
   def scores,
     do: [
-      {"∞", "Block", "fontisto:ban",
+      {"∞", "Block", "ph:prohibit-bold",
        "I need to express a veto, because this would harm a person or group, or it goes against our shared values or goals"},
-      #   {-3, "Strongly Disagree", "fontisto:rage", "I'm sure this would be a big mistake"},
-      {-2, "Disagree", "fontisto:frowning", "I am strongly opposed"},
-      {-1, "Concerned", "fontisto:confused",
+      {-2, "Disagree", "ph:smiley-sad", "I am strongly opposed"},
+      {-1, "Concerned", "ph:smiley-meh",
        "I think this may be a mistake, or I have a different opinion"},
-      {0, "Neutral", "fontisto:neutral", "Not relevant to me, I don't have an opinion"},
-      {1, "Seems fine", "fontisto:slightly-smile", "I'm OK to try this for now"},
-      {2, "Great", "fontisto:heart-eyes",
-       "This meets my needs and aligns with my values and goals"}
-      # {1, "Seems fine", "fontisto:slightly-smile", ""},
-      # {2, "Sounds good", "fontisto:smiley", ""},
-      # {3, "Awesome", "fontisto:heart-eyes", ""}
+      {0, "Neutral", "ph:smiley-blank", "Not relevant to me, I don't have an opinion"},
+      {1, "Seems fine", "ph:smiley", "I'm OK to try this for now"},
+      {2, "Great", "ph:smiley-wink", "This meets my needs and aligns with my values and goals"}
     ]
 
   def get(subject, object, opts \\ []),

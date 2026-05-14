@@ -16,15 +16,21 @@
         {#case percent(@vote_count, @total_votes)}
           {#match pct}
             <div class="relative overflow-hidden">
+              {!-- Bar starts at 0 and sweeps to its value on mount.
+                   For reduced-motion users we start at the target so the bar
+                   never visibly jumps. --}
               <div
                 aria-hidden="true"
+                x-data={"{ w: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? #{pct} : 0 }"}
+                x-init={"$nextTick(() => w = #{pct})"}
+                :style="`width: ${w}%`"
                 class={[
-                  "absolute inset-y-0 left-0 ease-out transition-[width] duration-300",
+                  "absolute inset-y-0 left-0",
+                  "motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
                   "bg-primary/15": @is_winner,
                   "bg-base-content/[0.06]": !@is_winner and !@is_vetoed,
                   "bg-error/[0.12]": @is_vetoed
                 ]}
-                style={"width: #{pct}%"}
               />
 
               <div class="relative flex items-center gap-3 px-3 py-2.5">
@@ -36,11 +42,20 @@
                       aria-label={l("Vetoed")}
                     />
                   {#elseif @is_winner}
-                    <Iconify.iconify
-                      icon="ph:check-bold"
-                      class="h-4 w-4 mt-0.5 text-primary shrink-0"
-                      aria-label={l("Winning option")}
-                    />
+                    {!-- Trophy gently drops in when the closed result renders. --}
+                    <span
+                      x-data="{ y: -6, o: 0 }"
+                      x-init="$nextTick(() => { y = 0; o = 1; })"
+                      :style="`transform: translateY(${y}px); opacity: ${o}`"
+                      class="mt-0.5 shrink-0 motion-safe:transition-all motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100 motion-reduce:!translate-y-0"
+                      aria-hidden="true"
+                    >
+                      <Iconify.iconify
+                        icon="ph:trophy-duotone"
+                        class="h-4 w-4 text-primary"
+                        aria-label={l("Winning option")}
+                      />
+                    </span>
                   {/if}
 
                   <div class="min-w-0 flex-1">
@@ -99,28 +114,34 @@
             </div>
         {/case}
       {#elseif @vote and not voted_on and @voting_format == "weighted_multiple"}
-        <div class="px-3 py-2.5">
-          <ChoiceContentLive
-            question={@question}
-            object={@object}
-            viewing_main_object={@viewing_main_object}
-            showing_within={@showing_within}
-            is_remote={@is_remote}
-            hide_actions={@hide_actions}
+        {!-- Inline layout: choice text on the left, face strip on the right.
+             Stacks below on narrow viewports (sm:). Halves the per-choice
+             vertical height versus the previous two-band layout. --}
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2">
+          <div class="flex-1 min-w-0">
+            <ChoiceContentLive
+              question={@question}
+              object={@object}
+              viewing_main_object={@viewing_main_object}
+              showing_within={@showing_within}
+              is_remote={@is_remote}
+              hide_actions={@hide_actions}
+              voting_format={@voting_format}
+              vote={@vote}
+              compact={@compact}
+              is_winner={false}
+            />
+          </div>
+          <VotingLive
             voting_format={@voting_format}
-            vote={@vote}
+            question={@question}
+            choice={@object}
+            index={@index}
+            selected={false}
             compact={@compact}
-            is_winner={false}
+            inline
           />
         </div>
-        <VotingLive
-          voting_format={@voting_format}
-          question={@question}
-          choice={@object}
-          index={@index}
-          selected={false}
-          compact={@compact}
-        />
       {#elseif @vote and not voted_on}
         <VotingLive
           voting_format={@voting_format}
@@ -200,36 +221,51 @@
           </div>
         </div>
       {#else}
-        <div class="px-3 py-2.5">
-          <ChoiceContentLive
-            question={@question}
-            object={@object}
-            viewing_main_object={@viewing_main_object}
-            showing_within={@showing_within}
-            is_remote={@is_remote}
-            hide_actions={@hide_actions}
-            voting_format={@voting_format}
-            vote={@vote}
-            compact={@compact}
-            is_winner={@is_winner}
-          />
-          {#if @show_author}
-            {#case proposer_name(@object)}
-              {#match nil}
-              {#match author}
-                {#case proposer_username(@object)}
-                  {#match nil}
-                    <div class="mt-1 text-xs text-base-content/60" data-role="proposer">
-                      {l("Suggested by %{name}", name: author)}
-                    </div>
-                  {#match username}
-                    <div class="mt-1 text-xs text-base-content/60" data-role="proposer">
-                      {l("Suggested by")}
-                      <a href={"/@" <> username} class="link link-hover text-base-content/75 hover:text-base-content">@{username}</a>
-                    </div>
-                {/case}
-            {/case}
+        <div class="flex items-start gap-3 px-3 py-2.5">
+          {#if @proposal_phase}
+            {!-- Disabled vote-slot preview: signals 'this becomes votable
+                 once the proposal phase closes.' Decorative only —
+                 `aria-hidden` + `tabindex=-1` keep it out of the a11y tree. --}
+            <input
+              type="radio"
+              disabled
+              tabindex="-1"
+              aria-hidden="true"
+              data-role="proposal-vote-slot"
+              class="radio radio-sm radio-primary mt-0.5 shrink-0 opacity-40 cursor-not-allowed"
+            />
           {/if}
+          <div class="flex-1 min-w-0">
+            <ChoiceContentLive
+              question={@question}
+              object={@object}
+              viewing_main_object={@viewing_main_object}
+              showing_within={@showing_within}
+              is_remote={@is_remote}
+              hide_actions={@hide_actions}
+              voting_format={@voting_format}
+              vote={@vote}
+              compact={@compact}
+              is_winner={@is_winner}
+            />
+            {#if @show_author}
+              {#case proposer_name(@object)}
+                {#match nil}
+                {#match author}
+                  {#case proposer_username(@object)}
+                    {#match nil}
+                      <div class="mt-1 text-xs text-base-content/60" data-role="proposer">
+                        {l("Suggested by %{name}", name: author)}
+                      </div>
+                    {#match username}
+                      <div class="mt-1 text-xs text-base-content/60" data-role="proposer">
+                        {l("Suggested by")}
+                        <a href={"/@" <> username} class="link link-hover text-base-content/75 hover:text-base-content">@{username}</a>
+                      </div>
+                  {/case}
+              {/case}
+            {/if}
+          </div>
         </div>
       {/if}
     </div>

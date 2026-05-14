@@ -3,105 +3,167 @@
     {!-- choice_id rides along so the submit handler can map back to it;
          the weight lives in a hidden input that `phx-click` writes to. --}
     <input type="hidden" name={"votes[#{@index}][choice_id]"} value={id(@choice)}>
-    <fieldset
-      id={"vote-input-#{@index}"}
-      role="radiogroup"
-      phx-update="ignore"
-      class={[
-        "border-t border-base-content/10",
-        "px-3 py-2": @compact,
-        "px-3 py-2.5": !@compact
-      ]}
-    >
-      <legend class="sr-only">{l("Your reaction to this choice")}</legend>
-      <input
-        type="hidden"
-        id={"vote-weight-#{@index}"}
-        name={"votes[#{@index}][weight]"}
-        value={chosen_value(@selected)}
-      />
-      <div class={[
-        "flex flex-wrap items-center justify-between",
-        "gap-1": @compact,
-        "gap-1.5 sm:gap-2": !@compact
-      ]}>
-        {#for {i, name, icon, description} <- scores_or_default(@scores)}
-          {#if @readonly}
-            <div
-              class={[
-                "inline-flex flex-col items-center gap-0.5 rounded-md",
-                "min-w-[40px] px-1 py-0.5": @compact,
-                "min-w-[44px] px-1.5 py-1": !@compact,
-                "opacity-30": i != @selected,
-                "opacity-100 bg-base-content/[0.06]": i == @selected
-              ]}
-              data-role="vote-score"
-              data-score={"#{i}"}
-              aria-current={i == @selected && "true"}
-              title={description}
-            >
-              <Iconify.iconify
-                icon={icon}
-                class={[
-                  score_color_class(i),
-                  "h-5 w-5": @compact,
-                  "h-6 w-6": !@compact
-                ]}
-              />
-              <span class={[
-                "leading-tight font-medium",
-                "text-[9px]": @compact,
-                "text-[10px]": !@compact,
-                "text-base-content": i == @selected,
-                "text-base-content/60": i != @selected
-              ]}>{name}</span>
-            </div>
-          {#else}
-            {!-- Buttons + aria-checked driven by Phoenix.LiveView.JS, not
+    {!-- Bind `choice_id` once via case-match so it's reused for ~7 ids
+         and ~3 JS targets below, instead of recomputing `id/1 || @index`
+         on each element (×6 buttons per choice gets pricey at scale). --}
+    {#case id(@choice) || @index}
+      {#match choice_id}
+        <fieldset
+          id={"vote-input-#{choice_id}"}
+          role="radiogroup"
+          phx-update="ignore"
+          x-data="{
+        selectedLabel: null,
+        selectedDesc: null,
+        selectedColor: null,
+        reduce: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        lastPulsedScore: null,
+        refresh() {
+          const checked = $el.querySelector('button[role=radio][aria-checked=true]');
+          if (checked) {
+            this.selectedLabel = checked.dataset.label;
+            this.selectedDesc = checked.dataset.description;
+            this.selectedColor = checked.dataset.colorClass || 'text-base-content';
+            // Briefly pulse the chosen icon when the selection changes
+            // (skip if reduce-motion or if it's the same score already selected).
+            if (!this.reduce && this.lastPulsedScore !== checked.dataset.score) {
+              const icon = checked.querySelector('[iconify]');
+              if (icon && icon.animate) {
+                icon.animate([
+                  { transform: 'scale(1.1)' },
+                  { transform: 'scale(1.3)' },
+                  { transform: 'scale(1.1)' }
+                ], { duration: 260, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' });
+              }
+              this.lastPulsedScore = checked.dataset.score;
+            }
+          } else {
+            this.selectedLabel = null;
+            this.lastPulsedScore = null;
+          }
+        },
+        moveFocus(dir) {
+          const btns = [...$el.querySelectorAll('button[role=radio]')];
+          if (!btns.length) return;
+          const i = btns.findIndex(b => b === document.activeElement);
+          const next = btns[(i < 0 ? 0 : i + dir + btns.length) % btns.length];
+          btns.forEach(b => b.tabIndex = -1);
+          next.tabIndex = 0;
+          next.focus();
+          next.click();
+        }
+      }"
+          x-init="refresh()"
+          x-on:click="refresh()"
+          x-on:keydown.right.prevent="moveFocus(1)"
+          x-on:keydown.left.prevent="moveFocus(-1)"
+          x-on:keydown.down.prevent="moveFocus(1)"
+          x-on:keydown.up.prevent="moveFocus(-1)"
+          class={[
+            "flex flex-col items-end gap-1",
+            "border-t border-base-content/10 px-3 py-1.5": @compact and !@inline,
+            "border-t border-base-content/10 px-3 py-2": !@compact and !@inline,
+            "shrink-0": @inline
+          ]}
+        >
+          <legend class="sr-only">{l("Your reaction to this choice")}</legend>
+          <input
+            type="hidden"
+            id={"vote-weight-#{choice_id}"}
+            name={"votes[#{@index}][weight]"}
+            value={chosen_value(@selected)}
+          />
+
+          {!-- Inline selected-state callout: replaces the per-button text labels
+           that used to repeat 6× under every choice. Right-aligned to sit
+           visually above the face strip. Shown only after a pick. --}
+          <div
+            :if={!@readonly}
+            x-show="selectedLabel !== null"
+            x-cloak
+            data-role="vote-selected-callout"
+            class="flex items-baseline justify-end gap-1.5 text-xs max-w-full"
+          >
+            <span class="font-medium whitespace-nowrap" :class="selectedColor" x-text="selectedLabel" />
+            <span class="text-base-content truncate hidden sm:inline" x-text="selectedDesc" />
+          </div>
+
+          <div class={[
+            "flex items-center justify-end",
+            "gap-0.5": @compact,
+            "gap-1 sm:gap-1.5": !@compact
+          ]}>
+            {#for {i, name, icon, description} <- scores_or_default(@scores)}
+              {#if @readonly}
+                <div
+                  class={[
+                    "inline-flex items-center justify-center rounded-md",
+                    "min-w-[28px] h-7 px-1": @compact,
+                    "min-w-[32px] h-8 px-1": !@compact,
+                    "opacity-25": i != @selected,
+                    "opacity-100 bg-base-content/[0.06]": i == @selected
+                  ]}
+                  data-role="vote-score"
+                  data-score={"#{i}"}
+                  aria-current={i == @selected && "true"}
+                  title={"#{name} — #{description}"}
+                >
+                  <Iconify.iconify
+                    icon={icon}
+                    class={[
+                      "h-5 w-5",
+                      if(i == "∞",
+                        do: "text-base-content/55",
+                        else: score_color_class(i)
+                      )
+                    ]}
+                  />
+                </div>
+              {#else}
+                {!-- Buttons + aria-checked driven by Phoenix.LiveView.JS, not
                  native radios — LV form-state lifecycle clobbered the user's
                  selection between clicks on native ones. --}
-            <button
-              type="button"
-              role="radio"
-              id={"vote-btn-#{@index}-#{score_key(i)}"}
-              aria-checked={if i == @selected, do: "true", else: "false"}
-              phx-click={choose_weight_js(
-                "vote-input-#{@index}",
-                "vote-btn-#{@index}-#{score_key(i)}",
-                "vote-weight-#{@index}",
-                i
-              )}
-              data-role="vote-score"
-              data-score={"#{i}"}
-              title={description}
-              class={[
-                "group relative inline-flex flex-col items-center gap-0.5 cursor-pointer rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
-                "min-w-[40px] min-h-[40px] px-1 py-0.5": @compact,
-                "min-w-[44px] min-h-[44px] px-1.5 py-1": !@compact
-              ]}
-            >
-              <Iconify.iconify
-                icon={icon}
-                class={[
-                  "transition opacity-40 group-hover:opacity-90 group-aria-checked:opacity-100 group-aria-checked:scale-110",
-                  score_color_class(i),
-                  "h-5 w-5": @compact,
-                  "h-6 w-6": !@compact
-                ]}
-              />
-              <span class={[
-                "leading-tight font-medium text-base-content/60 group-aria-checked:text-base-content",
-                "text-[9px]": @compact,
-                "text-[10px]": !@compact
-              ]}>
-                {name}
-              </span>
-              <span class="sr-only">{description}</span>
-            </button>
-          {/if}
-        {/for}
-      </div>
-    </fieldset>
+                <button
+                  type="button"
+                  role="radio"
+                  id={"vote-btn-#{choice_id}-#{score_key(i)}"}
+                  aria-checked={if i == @selected, do: "true", else: "false"}
+                  aria-label={"#{name}: #{description}"}
+                  tabindex={roving_tabindex(i, @selected)}
+                  phx-click={choose_weight_js(
+                    "vote-input-#{choice_id}",
+                    "vote-btn-#{choice_id}-#{score_key(i)}",
+                    "vote-weight-#{choice_id}",
+                    i
+                  )}
+                  data-role="vote-score"
+                  data-score={"#{i}"}
+                  data-label={name}
+                  data-description={description}
+                  data-color-class={score_color_class(i)}
+                  title={"#{name} — #{description}"}
+                  class={[
+                    "group relative inline-flex items-center justify-center cursor-pointer rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
+                    "min-w-[36px] min-h-[36px] px-1": @compact,
+                    "min-w-[40px] min-h-[40px] px-1.5": !@compact
+                  ]}
+                >
+                  <Iconify.iconify
+                    icon={icon}
+                    class={[
+                      "transition group-hover:opacity-90 group-aria-checked:opacity-100 group-aria-checked:scale-110 h-5 w-5",
+                      if(i == "∞",
+                        do: "text-base-content/55 group-aria-checked:text-error",
+                        else: score_color_class(i)
+                      )
+                    ]}
+                  />
+                </button>
+              {/if}
+            {/for}
+          </div>
+        </fieldset>
+    {/case}
   {#match "multiple"}
     <div id={"vote-input-#{id(@choice) || "noid"}"} phx-update="ignore">
       <label class={[

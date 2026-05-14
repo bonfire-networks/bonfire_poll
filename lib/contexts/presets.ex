@@ -89,22 +89,23 @@ defmodule Bonfire.Poll.Presets do
   def tuning_defaults(preset_key), do: get(preset_key).tuning_defaults
 
   @doc """
-  Translate preset + tuning state + duration into backend `Question` attrs.
+  Translate preset + tuning state into backend `Question` attrs.
 
   `tuning` keys: `:proposal_phase`, `:hide_results`, `:allow_vetoes`.
-  `extra` keys: `:multiple_choice` (Quick-only), `:proposal_duration_hours`.
+  `opts` keys: `:duration_hours`, `:proposal_duration_hours`,
+  `:multiple_choice` (Quick-only).
   """
-  @spec to_question_attrs(key(), map(), integer() | nil, map()) :: map()
-  def to_question_attrs(preset_key, tuning \\ %{}, duration_hours \\ nil, extra \\ %{}) do
+  @spec to_question_attrs(key(), map(), keyword() | map()) :: map()
+  def to_question_attrs(preset_key, tuning \\ %{}, opts \\ []) do
     preset = get(preset_key)
-    voting_hours = duration_hours || preset.duration_hours
-    proposal_hours = extra[:proposal_duration_hours] || default_proposal_hours()
+    voting_hours = opts[:duration_hours] || preset.duration_hours
+    proposal_hours = opts[:proposal_duration_hours] || default_proposal_hours()
     now = DateTime.utc_now()
 
     voting_format =
       cond do
         tuning[:allow_vetoes] -> "weighted_multiple"
-        shows_multiple_choice?(preset_key) and extra[:multiple_choice] -> "multiple"
+        shows_multiple_choice?(preset_key) and opts[:multiple_choice] -> "multiple"
         true -> preset.voting_format
       end
 

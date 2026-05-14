@@ -1,37 +1,3 @@
-defmodule Bonfire.Poll.WeightSelector do
-  @moduledoc "Composer's Advanced L3 control for the negative-score multiplier."
-  use Bonfire.UI.Common.Web, :stateless_component
-
-  prop weighting, :integer, default: 1
-
-  def render(assigns) do
-    ~F"""
-    <div class="flex flex-col gap-1">
-      <label
-        for="poll_weighting"
-        class="text-xs font-medium uppercase tracking-wider text-base-content/60"
-      >
-        {l("Negative score weight")}
-      </label>
-      <select
-        id="poll_weighting"
-        name="weighting"
-        data-role="poll-weighting"
-        class="select select-sm select-bordered max-w-[10rem]"
-      >
-        {#for weight <- 1..6}
-          <option value={weight} selected={@weighting == weight}>x{weight}</option>
-        {/for}
-        <option value="0" selected={@weighting == 0}>{l("Veto (∞)")}</option>
-      </select>
-      <p class="text-xs text-base-content/60">
-        {l("Multiplies the impact of negative scores against positive ones.")}
-      </p>
-    </div>
-    """
-  end
-end
-
 defmodule Bonfire.Poll.EditProposalLive do
   @moduledoc "A single option row (name input + delete button) in the composer."
   use Bonfire.UI.Common.Web, :stateless_component

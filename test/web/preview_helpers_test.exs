@@ -246,10 +246,19 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
 
     test "future datetimes produce a `_ minutes/hours/days left` string" do
       assert Q.time_remaining(future_dt(15)) =~ "minutes left"
-      # 90 minutes
-      assert Q.time_remaining(future_dt(90)) =~ "hours left"
-      # 36 hours
-      assert Q.time_remaining(future_dt(36 * 60)) =~ "days left"
+      # 180 minutes → 2+ hours (clock-skew safe, well above the singular boundary)
+      assert Q.time_remaining(future_dt(180)) =~ "hours left"
+      # 72 hours → 3 days
+      assert Q.time_remaining(future_dt(72 * 60)) =~ "days left"
+    end
+
+    test "singular form for exactly one unit" do
+      # 2 minutes ahead → 1 minute left (clock skew safe, still in minute branch)
+      assert Q.time_remaining(future_dt(2)) == "1 minute left"
+      # 70 minutes → 1 hour left
+      assert Q.time_remaining(future_dt(70)) == "1 hour left"
+      # 25 hours → 1 day left
+      assert Q.time_remaining(future_dt(25 * 60)) == "1 day left"
     end
   end
 end

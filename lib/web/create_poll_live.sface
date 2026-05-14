@@ -1,4 +1,4 @@
-<div class="write_post_content flex flex-col flex-1 min-h-0">
+<div id="smart_input_poll_content" class="write_post_content flex flex-col flex-1 min-h-0">
   <Form
     for={%{}}
     as={:post}
@@ -42,6 +42,12 @@
       submit_label={l("Post poll")}
     >
       <div class="flex flex-col gap-4 px-3 py-3">
+        {!-- Layer 1: the style choice shapes everything below. First-class, not a chip. --}
+        <Bonfire.Poll.PollStylePickerLive
+          selected_preset={@selected_preset}
+          event_target="#smart_input"
+        />
+
         <Inputs for={:post_content}>
           <Field name={:html_body}>
             <div class="flex flex-col gap-1.5">
@@ -87,120 +93,18 @@
           </button>
         </section>
 
-        <section class="flex flex-col gap-2" aria-label={l("Poll behaviour")}>
-          <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {#if @tuning_state[:proposal_phase]}
-              <div class="flex flex-wrap items-center gap-x-2 gap-y-2 min-h-[44px]">
-                <label class="flex items-center gap-2 whitespace-nowrap">
-                  <span class="text-sm text-base-content">{l("Proposals open")}</span>
-                  <select
-                    name="proposal_duration_hours"
-                    data-role="poll-proposal-duration"
-                    phx-change="Bonfire.Poll:change_proposal_duration"
-                    phx-target="#smart_input"
-                    class="select select-sm select-bordered min-w-[7rem]"
-                  >
-                    <option value="6" selected={@proposal_duration_hours == 6}>{l("6 hours")}</option>
-                    <option value="24" selected={@proposal_duration_hours == 24}>{l("1 day")}</option>
-                    <option value="72" selected={@proposal_duration_hours == 72}>{l("3 days")}</option>
-                    <option value="168" selected={@proposal_duration_hours == 168}>{l("1 week")}</option>
-                  </select>
-                </label>
-
-                <Iconify.iconify icon="ph:arrow-right" class="h-4 w-4 text-base-content/40" aria-hidden="true" />
-
-                <label class="flex items-center gap-2 whitespace-nowrap">
-                  <span class="text-sm text-base-content">{l("Then voting")}</span>
-                  <select
-                    name="duration_hours"
-                    data-role="poll-duration"
-                    phx-change="Bonfire.Poll:change_duration"
-                    phx-target="#smart_input"
-                    class="select select-sm select-bordered min-w-[7rem]"
-                  >
-                    <option value="1" selected={@duration_hours == 1}>{l("1 hour")}</option>
-                    <option value="6" selected={@duration_hours == 6}>{l("6 hours")}</option>
-                    <option value="24" selected={@duration_hours == 24}>{l("1 day")}</option>
-                    <option value="72" selected={@duration_hours == 72}>{l("3 days")}</option>
-                    <option value="168" selected={@duration_hours == 168}>{l("1 week")}</option>
-                  </select>
-                </label>
-              </div>
-            {#else}
-              <label class="flex items-center gap-2 min-h-[44px] whitespace-nowrap">
-                <span class="text-sm text-base-content">{l("Closes in")}</span>
-                <select
-                  name="duration_hours"
-                  data-role="poll-duration"
-                  phx-change="Bonfire.Poll:change_duration"
-                  phx-target="#smart_input"
-                  class="select select-sm select-bordered min-w-[7rem]"
-                >
-                  <option value="1" selected={@duration_hours == 1}>{l("1 hour")}</option>
-                  <option value="6" selected={@duration_hours == 6}>{l("6 hours")}</option>
-                  <option value="24" selected={@duration_hours == 24}>{l("1 day")}</option>
-                  <option value="72" selected={@duration_hours == 72}>{l("3 days")}</option>
-                  <option value="168" selected={@duration_hours == 168}>{l("1 week")}</option>
-                </select>
-              </label>
-            {/if}
-
-            <label
-              :if={Presets.shows_multiple_choice?(@selected_preset)}
-              class="inline-flex items-center gap-2 cursor-pointer min-h-[44px] text-sm text-base-content whitespace-nowrap"
-            >
-              <input
-                type="checkbox"
-                class="toggle toggle-primary"
-                data-role="poll-multiple-choice"
-                checked={@multiple_choice}
-                phx-click="Bonfire.Poll:toggle_multiple"
-                phx-value-current={if @multiple_choice, do: "true", else: "false"}
-                phx-target="#smart_input"
-              />
-              {l("Multiple choice")}
-            </label>
-          </div>
-
-          <Bonfire.Poll.PollStylePickerLive
-            selected_preset={@selected_preset}
-            event_target="#smart_input"
-          />
-
-          <Bonfire.Poll.TuningTogglesLive
-            selected_preset={@selected_preset}
-            tuning_state={@tuning_state}
-            event_target="#smart_input"
-          />
-        </section>
-
-        <section class="rounded-md border border-base-content/15 bg-base-content/[0.03]">
-          <button
-            type="button"
-            data-role="poll-advanced-toggle"
-            phx-click="Bonfire.Poll:toggle_advanced"
-            phx-value-current={if @advanced_open, do: "true", else: "false"}
-            phx-target="#smart_input"
-            aria-expanded={if @advanced_open, do: "true", else: "false"}
-            class="flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-3 min-h-[44px] text-sm font-medium text-base-content/80 hover:bg-base-content/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-md"
-          >
-            <span class="flex items-center gap-2">
-              <#Icon iconify="ph:sliders-horizontal-duotone" class="h-4 w-4" />
-              {l("Advanced")}
-            </span>
-            <#Icon
-              iconify="ph:caret-down-duotone"
-              class={
-                "h-3 w-3 transition-transform",
-                "rotate-180": @advanced_open
-              }
-            />
-          </button>
-          <div :if={@advanced_open} class="flex flex-col gap-3 border-t border-base-content/10 p-3">
-            <WeightSelector weighting={@weighting} />
-            {!-- TODO: phase dates picker, per-circle voting rights --}
-          </div>
-        </section>
+        {!-- Layer 2: one coherent panel of user-intent controls. Replaces the
+             prior split between inline durations/multi-choice and the separate
+             TuningTogglesLive block, plus the empty Advanced panel. --}
+        <Bonfire.Poll.TuningTogglesLive
+          selected_preset={@selected_preset}
+          tuning_state={@tuning_state}
+          duration_hours={@duration_hours}
+          proposal_duration_hours={@proposal_duration_hours}
+          weighting={@weighting}
+          multiple_choice={@multiple_choice}
+          event_target="#smart_input"
+        />
       </div>
     </Bonfire.UI.Common.InputControlsLive>
   </Form>

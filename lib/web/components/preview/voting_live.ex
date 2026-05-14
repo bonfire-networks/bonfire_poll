@@ -11,6 +11,9 @@ defmodule Bonfire.Poll.VotingLive do
   prop readonly, :boolean, default: false
   prop scores, :list, default: nil
   prop compact, :boolean, default: false
+  # When true, render without the outer border-t and wrapper padding so the
+  # parent can place the strip on the same row as the choice content.
+  prop inline, :boolean, default: false
   prop index, :integer, default: 0
 
   slot default
@@ -38,4 +41,17 @@ defmodule Bonfire.Poll.VotingLive do
   def chosen_value(false), do: ""
   def chosen_value(nil), do: ""
   def chosen_value(value), do: to_string(value)
+
+  @doc """
+  Roving-tabindex pattern for a `role=radiogroup`: the selected button is
+  tab-stop (`0`), the rest are skipped (`-1`). When nothing is selected, the
+  Neutral (`0`) button becomes the tab-stop so Tab still enters the group.
+  """
+  def roving_tabindex(score, selected) do
+    cond do
+      selected && score == selected -> "0"
+      !selected && score == 0 -> "0"
+      true -> "-1"
+    end
+  end
 end

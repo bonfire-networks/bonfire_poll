@@ -1,75 +1,48 @@
-<details class="dropdown dropdown-top">
-  {#case Presets.get(@selected_preset)}
-    {#match active}
-      <summary
-        class="inline-flex items-center gap-1.5 py-2 text-sm font-medium text-base-content/70 hover:text-base-content cursor-pointer list-none [&::-webkit-details-marker]:hidden"
-        title={l("Choose a poll style")}
-        aria-label={l("Poll style: %{name}", name: active.name)}
-        data-role="poll-style-chip"
+<fieldset
+  role="radiogroup"
+  aria-label={l("Poll style")}
+  data-role="poll-style-picker"
+  class="flex flex-col gap-2"
+>
+  <legend class="text-xs font-medium uppercase tracking-wider text-base-content/55">
+    {l("Style")}
+  </legend>
+  <div class="grid grid-cols-1 mt-2 sm:grid-cols-3 gap-2">
+    {#for preset <- Presets.all()}
+      <button
+        type="button"
+        role="radio"
+        aria-checked={if preset.key == @selected_preset, do: "true", else: "false"}
+        phx-click="Bonfire.Poll:select_preset"
+        phx-value-preset={preset.key}
+        phx-target={@event_target}
+        data-role="poll-style-option"
+        data-preset={preset.key}
+        class="group flex flex-col items-start gap-1 rounded-md border border-base-content/15 bg-base-100 px-3 py-2 min-h-[44px] text-left transition hover:bg-base-content/[0.04] hover:border-base-content/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 aria-checked:bg-primary/[0.06] aria-checked:border-primary/40 aria-checked:ring-1 aria-checked:ring-primary/40"
       >
-        <span class="text-base-content/55">{l("Style")} ·</span>
-        <span class="text-base-content">{active.name}</span>
-        <#Icon iconify="ph:caret-down-bold" class="h-3 w-3 opacity-60" />
-      </summary>
-      <ul
-        tabindex="0"
-        role="listbox"
-        aria-label={l("Available poll styles")}
-        class="dropdown-content menu bg-base-100 rounded-md z-10 w-72 p-1.5 shadow-lg border border-base-content/10 mb-1"
-      >
-        <li :for={preset <- Presets.all()}>
-          <a
-            phx-click="Bonfire.Poll:select_preset"
-            phx-value-preset={preset.key}
-            phx-target={@event_target}
-            data-role="poll-style-option"
-            data-preset={preset.key}
-            role="option"
-            aria-selected={if preset.key == @selected_preset, do: "true", else: "false"}
-            class={
-              "flex items-start gap-3 rounded-md p-2.5 min-h-[44px]",
-              "bg-primary/5": preset.key == @selected_preset
-            }
-          >
-            <span class={
-              "flex h-7 w-7 items-center justify-center rounded-md shrink-0 mt-0.5",
-              "bg-primary/15 text-primary": preset.key == @selected_preset,
-              "bg-base-content/5 text-base-content/70": preset.key != @selected_preset
-            }>
-              <Iconify.iconify icon={preset.icon} class="h-4 w-4" />
-            </span>
-            <span class="flex flex-col min-w-0">
-              <span class="text-sm font-medium text-base-content">{preset.name}</span>
-              <span class="text-xs leading-snug text-base-content/60">{preset.description}</span>
-            </span>
-          </a>
-        </li>
-        <li class="px-1 pt-1 pb-0.5">
-          <hr class="border-base-content/10 m-0">
-        </li>
-        <li>
-          <a
-            phx-click="Bonfire.Poll:select_preset"
-            phx-value-preset="custom"
-            phx-target={@event_target}
-            data-role="poll-style-option"
-            data-preset="custom"
-            role="option"
-            aria-selected={if @selected_preset == :custom, do: "true", else: "false"}
-            class={
-              "flex items-start gap-3 rounded-md p-2.5 min-h-[44px]",
-              "bg-primary/5": @selected_preset == :custom
-            }
-          >
-            <span class="flex h-7 w-7 items-center justify-center rounded-md shrink-0 mt-0.5 bg-base-content/5 text-base-content/70">
-              <#Icon iconify="ph:sliders-horizontal-duotone" class="h-4 w-4" />
-            </span>
-            <span class="flex flex-col min-w-0">
-              <span class="text-sm font-medium text-base-content">{l("Custom")}</span>
-              <span class="text-xs leading-snug text-base-content/60">{l("Configure freely.")}</span>
-            </span>
-          </a>
-        </li>
-      </ul>
-  {/case}
-</details>
+        <span class="flex items-center">
+          <!-- <Iconify.iconify
+            icon={preset.icon}
+            class="h-4 w-4 text-base-content/55 transition group-aria-checked:text-primary"
+          /> -->
+          <span class="text-sm font-medium text-base-content">{preset.name}</span>
+        </span>
+        <span class="text-xs leading-snug text-base-content/60">{preset.description}</span>
+      </button>
+    {/for}
+  </div>
+  <button
+    type="button"
+    phx-click="Bonfire.Poll:select_preset"
+    phx-value-preset="custom"
+    phx-target={@event_target}
+    role="radio"
+    aria-checked={if @selected_preset == :custom, do: "true", else: "false"}
+    data-role="poll-style-option"
+    data-preset="custom"
+    class="self-start inline-flex items-center gap-1.5 px-1 text-xs text-base-content/60 hover:text-base-content underline decoration-base-content/20 underline-offset-2 hover:decoration-base-content/50 aria-checked:text-primary aria-checked:font-medium aria-checked:decoration-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-sm"
+  >
+    <Iconify.iconify icon="ph:sliders-horizontal-duotone" class="size-4" aria-hidden="true" />
+    {l("Or configure custom")}
+  </button>
+</fieldset>

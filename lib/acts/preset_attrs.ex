@@ -16,11 +16,9 @@ defmodule Bonfire.Poll.Acts.PresetAttrs do
           Presets.to_question_attrs(
             Presets.safe_key(preset_params[:preset]),
             preset_params[:tuning] || %{},
-            preset_params[:duration_hours],
-            %{
-              multiple_choice: preset_params[:multiple_choice] == true,
-              proposal_duration_hours: preset_params[:proposal_duration_hours]
-            }
+            duration_hours: preset_params[:duration_hours],
+            proposal_duration_hours: preset_params[:proposal_duration_hours],
+            multiple_choice: preset_params[:multiple_choice] == true
           )
 
         new_options =

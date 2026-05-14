@@ -159,7 +159,7 @@ defmodule Bonfire.Poll.PresetsTest do
 
     test "duration_hours overrides the preset default" do
       now = DateTime.utc_now()
-      attrs = Presets.to_question_attrs(:quick, %{}, 1)
+      attrs = Presets.to_question_attrs(:quick, %{}, duration_hours: 1)
       [start, end_dt] = attrs.voting_dates
       span_seconds = DateTime.diff(end_dt, start)
       # 1 hour ± rounding tolerance for the test
@@ -180,10 +180,8 @@ defmodule Bonfire.Poll.PresetsTest do
         Presets.to_question_attrs(
           :group_decision,
           %{proposal_phase: true},
-          # voting hours
-          48,
-          # proposal hours
-          %{proposal_duration_hours: 6}
+          duration_hours: 48,
+          proposal_duration_hours: 6
         )
 
       [p_start, p_end] = attrs.proposal_dates
@@ -196,7 +194,7 @@ defmodule Bonfire.Poll.PresetsTest do
     end
 
     test "proposal_duration_hours defaults to Presets.default_proposal_hours/0" do
-      attrs = Presets.to_question_attrs(:quick, %{proposal_phase: true}, 24)
+      attrs = Presets.to_question_attrs(:quick, %{proposal_phase: true}, duration_hours: 24)
       [p_start, p_end] = attrs.proposal_dates
 
       assert_in_delta DateTime.diff(p_end, p_start),
@@ -206,9 +204,10 @@ defmodule Bonfire.Poll.PresetsTest do
 
     test "proposal_duration_hours is ignored when proposal_phase is off" do
       attrs =
-        Presets.to_question_attrs(:quick, %{proposal_phase: false}, 24, %{
+        Presets.to_question_attrs(:quick, %{proposal_phase: false},
+          duration_hours: 24,
           proposal_duration_hours: 168
-        })
+        )
 
       refute Map.has_key?(attrs, :proposal_dates)
     end

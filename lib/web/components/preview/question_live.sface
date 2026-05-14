@@ -1,14 +1,18 @@
-{#case view_state(@object)}
+{#case view_state(@object, @is_remote)}
   {#match %{
       choices: choices,
       has_voted: has_voted,
-      remote_stats: remote_stats,
+      counts_by_choice_id: counts_by_choice_id,
       end_time: end_time,
       closed: closed,
       locked: locked,
       winning_ids: winning_ids,
       voting_format: voting_format,
-      total_votes: total_votes
+      total_votes: total_votes,
+      proposal_open: proposal_open,
+      time_remaining_label: time_remaining_label,
+      proposal_end_label: proposal_end_label,
+      question_without_choices: question_without_choices
     }}
     <div
       data-id="activity_question"
@@ -94,23 +98,26 @@
       </div>
 
       {#if choices != []}
-        {#if e(@object, :proposal_dates, []) != []}
+        {!-- Gate on `proposal_open` (pre-computed), not `proposal_dates != []`:
+             `proposal_dates` persists past the phase end, so the bare check
+             would keep blocking voting after suggestions close. --}
+        {#if proposal_open}
           <div class="mt-3 rounded-md border border-base-content/10 overflow-hidden">
-            <div class="flex items-center gap-2 px-3 py-2 text-xs uppercase tracking-wider text-base-content/60 bg-base-content/[0.02] border-b border-base-content/8">
-              <Iconify.iconify icon="ph:lightbulb-duotone" class="h-3.5 w-3.5" />
-              <span>{l("Proposal phase")}</span>
-              {#case time_remaining(List.last(e(@object, :proposal_dates, [])))}
+            <div class="flex items-center gap-2 px-3 py-2 border-b border-base-content/8 text-sm text-base-content/70">
+              <Iconify.iconify icon="ph:lightbulb-duotone" class="h-3.5 w-3.5 shrink-0" />
+              <span class="font-medium text-base-content">{l("Proposal phase")}</span>
+              {#case proposal_end_label}
                 {#match nil}
                 {#match label}
                   <span class="text-base-content/40" aria-hidden="true">·</span>
-                  <span class="normal-case tracking-normal">{label}</span>
+                  <span class="tabular-nums">{label}</span>
               {/case}
             </div>
 
             <div class="divide-y divide-base-content/8">
               {#for {choice, idx} <- Enum.with_index(choices)}
                 <ChoiceLive
-                  question={Map.drop(@object, [:choices])}
+                  question={question_without_choices}
                   object={choice}
                   index={idx}
                   viewing_main_object={@viewing_main_object}
@@ -121,13 +128,13 @@
                   compact={@viewing_main_object != true}
                   vote={false}
                   results_visible={false}
+                  proposal_phase
                   show_author
                 />
               {/for}
             </div>
 
-            {#if not is_nil(current_user_id(@__context__)) and
-                Bonfire.Poll.Questions.proposal_open?(@object)}
+            {#if not is_nil(current_user_id(@__context__))}
               <form
                 class="flex items-center gap-2 px-3 py-2.5 border-t border-base-content/8 bg-base-content/[0.02]"
                 phx-submit="Bonfire.Poll:submit_proposal"
@@ -162,8 +169,12 @@
             x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
           >
             {#if voting_format == "weighted_multiple" and vetoed?(choices)}
+              {!-- Soft entrance: empathetic, not celebratory. Calm fade-in. --}
               <div
-                class="flex items-center gap-2 px-3 py-2 bg-error/[0.08] border-b border-error/20 text-error text-sm"
+                x-data="{ shown: window.matchMedia('(prefers-reduced-motion: reduce)').matches }"
+                x-init="$nextTick(() => shown = true)"
+                :class="shown ? 'opacity-100' : 'opacity-0'"
+                class="flex items-center gap-2 px-3 py-2 bg-error/[0.08] border-b border-error/20 text-error text-sm motion-safe:transition-opacity motion-safe:duration-400 motion-safe:ease-out"
                 role="status"
                 data-role="veto-banner"
               >
@@ -174,11 +185,15 @@
 
             {#if closed}
               <div
-                class="flex items-center gap-2 px-3 py-2 bg-base-content/[0.03] border-b border-base-content/8 text-xs text-base-content/60 uppercase tracking-wider"
+                class="flex items-center gap-2 px-3 py-2 border-b border-base-content/8 text-sm text-base-content/70"
                 data-role="closed-header"
               >
-                <Iconify.iconify icon="ph:lock-key" class="h-3.5 w-3.5" />
-                <span>{l("Closed · final results")}</span>
+                <Iconify.iconify icon="ph:lock-key" class="h-3.5 w-3.5 shrink-0" />
+                <span class="font-medium text-base-content">{l("Closed")}</span>
+                <span class="text-base-content/40" aria-hidden="true">·</span>
+                <span class="tabular-nums" data-role="vote-count">
+                  {pluralize_votes(total_votes)}
+                </span>
               </div>
             {/if}
 
@@ -187,7 +202,7 @@
             <div class="divide-y divide-base-content/8">
               {#for {choice, idx} <- Enum.with_index(choices)}
                 <ChoiceLive
-                  question={Map.drop(@object, [:choices])}
+                  question={question_without_choices}
                   object={choice}
                   index={idx}
                   viewing_main_object={@viewing_main_object}
@@ -197,7 +212,7 @@
                   voting_format={voting_format}
                   compact={@viewing_main_object != true}
                   vote={not closed and not is_nil(current_user_id(@__context__))}
-                  vote_count={choice_vote_count(choice, remote_stats)}
+                  vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
                   total_votes={total_votes}
                   has_voted_overall={has_voted}
                   results_visible={(closed or has_voted) and not locked}
@@ -208,95 +223,92 @@
               {/for}
             </div>
 
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 bg-base-content/[0.02] border-t border-base-content/8">
-              {#if is_nil(current_user_id(@__context__))}
-                <a
-                  href="/login"
-                  class="btn btn-sm btn-ghost border border-base-content/20"
-                  data-role="sign-in-to-vote"
-                >
-                  {l("Sign in to vote")}
-                </a>
-              {#elseif closed}
-              {#elseif has_voted}
-                <span
-                  class="inline-flex items-center gap-1.5 text-sm text-primary font-medium"
-                  data-role="voted-indicator"
-                >
-                  <Iconify.iconify icon="ph:check-circle-fill" class="h-4 w-4" />
-                  {l("Voted")}
-                </span>
-              {#else}
-                <button
-                  type="submit"
-                  id={"submit-vote-#{id(@object)}"}
-                  data-role="submit-vote"
-                  class="btn btn-primary btn-sm"
-                  x-bind:disabled={if voting_format == "weighted_multiple",
-                    do: "false",
-                    else: "!hasSelection"}
-                >
-                  {if voting_format == "weighted_multiple",
-                    do: l("Submit votes"),
-                    else: l("Vote")}
-                </button>
-              {/if}
-
-              {#if not closed and not has_voted}
-                {#if locked}
-                  <span
-                    class="text-sm text-base-content/40 cursor-not-allowed"
-                    title={l("Results hidden until poll closes.")}
-                    data-role="results-toggle-locked"
+            {#if not closed}
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 bg-base-content/[0.02] border-t border-base-content/8">
+                {#if is_nil(current_user_id(@__context__))}
+                  <a
+                    href="/login"
+                    class="btn btn-sm btn-ghost border border-base-content/20"
+                    data-role="sign-in-to-vote"
                   >
-                    {l("See results")}
+                    {l("Sign in to vote")}
+                  </a>
+                {#elseif has_voted}
+                  {!-- Pop-in on the first render after submission. --}
+                  <span
+                    x-data="{ s: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0.85, o: 0 }"
+                    x-init="$nextTick(() => { s = 1; o = 1; })"
+                    :style="`transform: scale(${s}); opacity: ${o}`"
+                    class="inline-flex items-center gap-1.5 text-sm text-primary font-medium motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100"
+                    data-role="voted-indicator"
+                  >
+                    <Iconify.iconify icon="ph:check-circle-fill" class="h-4 w-4" />
+                    {l("Voted")}
                   </span>
                 {#else}
                   <button
-                    type="button"
-                    x-on:click="showResults = !showResults"
-                    class="text-sm link link-hover text-base-content/70 hover:text-base-content"
-                    data-role="results-toggle"
+                    type="submit"
+                    id={"submit-vote-#{id(@object)}"}
+                    data-role="submit-vote"
+                    class="btn btn-primary btn-sm"
+                    x-bind:disabled={if voting_format == "weighted_multiple",
+                      do: "false",
+                      else: "!hasSelection"}
                   >
-                    <span x-show="!showResults">{l("See results")}</span>
-                    <span x-show="showResults" x-cloak>{l("Hide results")}</span>
+                    {if voting_format == "weighted_multiple",
+                      do: l("Submit votes"),
+                      else: l("Vote")}
                   </button>
                 {/if}
-                <span class="text-base-content/30" aria-hidden="true">·</span>
-              {/if}
 
-              {#if not locked}
-                <span class="text-sm text-base-content/60 tabular-nums" data-role="vote-count">
-                  {l("%{count} votes", count: total_votes)}
-                </span>
-              {/if}
-
-              {#case time_remaining(end_time)}
-                {#match nil}
-                {#match label}
-                  {#if not locked}
-                    <span class="text-base-content/30" aria-hidden="true">·</span>
+                {#if not has_voted}
+                  {#if locked}
+                    <span
+                      class="text-sm text-base-content/40 cursor-not-allowed"
+                      title={l("Results hidden until poll closes.")}
+                      data-role="results-toggle-locked"
+                    >
+                      {l("See results")}
+                    </span>
+                  {#else}
+                    <button
+                      type="button"
+                      x-on:click="showResults = !showResults"
+                      class="text-sm link link-hover text-base-content/70 hover:text-base-content"
+                      data-role="results-toggle"
+                    >
+                      <span x-show="!showResults">{l("See results")}</span>
+                      <span x-show="showResults" x-cloak>{l("Hide results")}</span>
+                    </button>
                   {/if}
-                  <span
-                    class={[
-                      "text-sm tabular-nums",
-                      "text-base-content/60": not closed,
-                      "text-base-content/70 font-medium": closed
-                    ]}
-                    data-role="time-remaining"
-                  >
-                    {label}
-                  </span>
-              {/case}
+                {/if}
 
-              {#if @is_remote}
-                <span class="text-base-content/30" aria-hidden="true">·</span>
-                <span class="inline-flex items-center gap-1 text-xs text-base-content/55">
-                  <Iconify.iconify icon="ph:globe-simple" class="h-3 w-3" />
-                  {l("Federated")}
-                </span>
-              {/if}
-            </div>
+                {!-- Meta cluster: counts + time. No mid-dots — `gap-x-3` spaces them
+                     plenty and removes the wall-of-bullets look. --}
+                <div class="inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-sm">
+                  {#if not locked}
+                    <span class="text-base-content/60 tabular-nums" data-role="vote-count">
+                      {pluralize_votes(total_votes)}
+                    </span>
+                  {/if}
+
+                  {#case time_remaining_label}
+                    {#match nil}
+                    {#match label}
+                      <span class="text-base-content/60 tabular-nums" data-role="time-remaining">
+                        {label}
+                      </span>
+                  {/case}
+                </div>
+
+                {#if @is_remote}
+                  <span class="ml-auto inline-flex items-center gap-1 text-xs text-base-content/55">
+                    <Iconify.iconify icon="ph:globe-simple" class="h-3 w-3" />
+                    {l("Federated")}
+                  </span>
+                {/if}
+              </div>
+            {/if}
           </form>
         {/if}
       {/if}

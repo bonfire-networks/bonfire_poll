@@ -125,11 +125,9 @@ defmodule Bonfire.Poll.LiveHandler do
   @composer_id "smart_input_component"
 
   def handle_event("select_preset", %{"preset" => "custom"}, socket) do
-    # Auto-expand Advanced so the user lands on the controls they came for.
     maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
       selected_preset: :custom,
       tuning_state: Presets.tuning_defaults(:custom),
-      advanced_open: true,
       proposal_duration_hours: Presets.default_proposal_hours(),
       weighting: 1,
       multiple_choice: false
@@ -165,14 +163,6 @@ defmodule Bonfire.Poll.LiveHandler do
     # Component's `update/2` merges this partial into `tuning_state`.
     maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
       merge_tuning: %{safe_tuning_key(key) => !parse_bool(current_str)}
-    })
-
-    {:noreply, socket}
-  end
-
-  def handle_event("toggle_advanced", %{"current" => current_str}, socket) do
-    maybe_send_update(Bonfire.Poll.Web.CreatePollLive, @composer_id, %{
-      advanced_open: !parse_bool(current_str)
     })
 
     {:noreply, socket}
