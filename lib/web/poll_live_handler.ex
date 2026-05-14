@@ -255,13 +255,21 @@ defmodule Bonfire.Poll.LiveHandler do
   end
 
   def handle_event("submit_vote", %{"question_id" => question} = params, socket) do
-    with {:ok, _result} <-
-           Bonfire.Poll.Votes.vote(
-             current_user(socket),
-             question,
-             parse_votes(params)
-           ) do
-      {:noreply, assign_flash(socket, :info, l("Thanks for participating!"))}
+    case Bonfire.Poll.Votes.vote(
+           current_user(socket),
+           question,
+           parse_votes(params)
+         ) do
+      {:ok, _result} ->
+        {:noreply, assign_flash(socket, :info, l("Thanks for participating!"))}
+
+      {:error, msg} when is_binary(msg) ->
+        {:noreply, assign_error(socket, msg)}
+
+      other ->
+        # Defensive: log + swallow unexpected return shapes from Votes.vote/4.
+        error(other, "submit_vote: unexpected vote result")
+        {:noreply, assign_error(socket, l("Sorry, you can't vote on this poll."))}
     end
   end
 

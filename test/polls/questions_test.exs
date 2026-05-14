@@ -58,6 +58,131 @@ defmodule Bonfire.Poll.QuestionsTest do
     assert Bonfire.Poll.Questions.proposal_ended?(ended_question)
   end
 
+  test "list_closing_soon/2 returns open polls ordered by closing time, excluding closed and proposal-phase polls" do
+    user = fake_user!()
+    now = DateTime.utc_now()
+
+    # 1 hour ahead (closes soonest)
+    {:ok, _soon} =
+      fake_question(
+        %{
+          post_content: %{name: "Soon"},
+          voting_dates: [DateTime.add(now, -60, :second), DateTime.add(now, 3600, :second)]
+        },
+        current_user: user,
+        boundary: "public"
+      )
+
+    # 1 day ahead
+    {:ok, _later} =
+      fake_question(
+        %{
+          post_content: %{name: "Later"},
+          voting_dates: [DateTime.add(now, -60, :second), DateTime.add(now, 86_400, :second)]
+        },
+        current_user: user,
+        boundary: "public"
+      )
+
+    # Already closed — must be excluded.
+    {:ok, _closed} =
+      fake_question(
+        %{
+          post_content: %{name: "Closed"},
+          voting_dates: [DateTime.add(now, -7200, :second), DateTime.add(now, -60, :second)]
+        },
+        current_user: user,
+        boundary: "public"
+      )
+
+    # Voting starts tomorrow (still in proposal phase) — must be excluded.
+    {:ok, _proposal_only} =
+      fake_question(
+        %{
+          post_content: %{name: "Proposal"},
+          proposal_dates: [now, DateTime.add(now, 3600, :second)],
+          voting_dates: [DateTime.add(now, 3600, :second), DateTime.add(now, 7200, :second)]
+        },
+        current_user: user,
+        boundary: "public"
+      )
+
+    polls = Bonfire.Poll.Questions.list_closing_soon([current_user: user], 5)
+    names = Enum.map(polls, &(&1.post_content && &1.post_content.name))
+
+    assert "Soon" in names
+    assert "Later" in names
+    refute "Closed" in names
+    refute "Proposal" in names
+    # Soonest first.
+    assert Enum.find_index(names, &(&1 == "Soon")) < Enum.find_index(names, &(&1 == "Later"))
+  end
+
+  test "list_closing_soon/2 caps results at the given limit" do
+    user = fake_user!()
+    now = DateTime.utc_now()
+
+    for hours <- 1..5 do
+      {:ok, _} =
+        fake_question(
+          %{
+            post_content: %{name: "P#{hours}"},
+            voting_dates: [
+              DateTime.add(now, -60, :second),
+              DateTime.add(now, hours * 3600, :second)
+            ]
+          },
+          current_user: user,
+          boundary: "public"
+        )
+    end
+
+    assert length(Bonfire.Poll.Questions.list_closing_soon([current_user: user], 3)) == 3
+  end
+
+  test "vote_counts_for_questions/1 returns a map of question_id → total vote count" do
+    voter = fake_user!()
+    author = fake_user!()
+    now = DateTime.utc_now()
+
+    {:ok, q1} =
+      fake_question_with_choices(
+        %{
+          post_content: %{name: "Q1"},
+          voting_format: "single",
+          voting_dates: [DateTime.add(now, -60, :second), DateTime.add(now, 3600, :second)]
+        },
+        [%{name: "a"}, %{name: "b"}],
+        current_user: author,
+        boundary: "public"
+      )
+
+    {:ok, q2} =
+      fake_question_with_choices(
+        %{
+          post_content: %{name: "Q2"},
+          voting_format: "single",
+          voting_dates: [DateTime.add(now, -60, :second), DateTime.add(now, 3600, :second)]
+        },
+        [%{name: "c"}],
+        current_user: author,
+        boundary: "public"
+      )
+
+    # Cast one vote against the first choice of q1.
+    [c1, _] = q1.choices
+    {:ok, _} = Bonfire.Poll.Votes.vote(voter, q1, [%{choice_id: c1.id, weight: 1}])
+
+    counts = Bonfire.Poll.Questions.vote_counts_for_questions([q1.id, q2.id])
+    assert counts[q1.id] == 1
+    # Questions with no votes are absent from the map (no zero key).
+    refute Map.has_key?(counts, q2.id)
+  end
+
+  test "vote_counts_for_questions/1 handles an empty list without hitting the DB" do
+    assert Bonfire.Poll.Questions.vote_counts_for_questions([]) == %{}
+  end
+
   describe "full form-flow Questions.create" do
     # End-to-end test for the path the composer's LiveHandler runs through:
     #   form params  →  input_to_atoms  →  preset_params + question_attrs

@@ -162,6 +162,41 @@ defmodule Bonfire.Poll.Questions do
     |> list_paginated(to_options(opts) ++ [subject_user: by_user])
   end
 
+  @doc """
+  Polls whose voting phase is currently open, ordered by closing time
+  (soonest first). Useful for "closing soon" dashboard widgets.
+
+  Filters on `voting_dates[1] <= now < voting_dates[2]` so it also
+  excludes polls still in their proposal phase.
+
+  Preloads the creator (for attribution). Vote counts are intentionally
+  *not* preloaded as `object_voted` — use `vote_counts_for_questions/1`
+  to fetch them as a single aggregate so a popular poll doesn't load
+  thousands of vote rows just to be counted.
+  """
+  def list_closing_soon(opts \\ [], limit \\ 3) do
+    now = DateTime.utc_now()
+
+    query_base()
+    |> proload(created: [creator: [:profile, :character]])
+    |> where([main_object: q], not is_nil(q.voting_dates))
+    |> where([main_object: q], fragment("?[1]", q.voting_dates) <= ^now)
+    |> where([main_object: q], fragment("?[2]", q.voting_dates) > ^now)
+    |> order_by([main_object: q], asc: fragment("?[2]", q.voting_dates))
+    |> limit(^limit)
+    |> boundarise(main_object.id, opts)
+    |> repo().all()
+  end
+
+  @doc """
+  Total vote count per question, as a single grouped SQL query.
+  Returns `%{question_id => count}`. Missing keys mean zero.
+
+  Delegates to `Bonfire.Poll.Votes.counts_for_questions/1` — the join
+  reaches across `Edge`/`Vote` schemas which belong in the Votes context.
+  """
+  defdelegate vote_counts_for_questions(question_ids), to: Votes, as: :counts_for_questions
+
   @doc "List posts with pagination"
   def list_paginated(filters, opts \\ [])
 

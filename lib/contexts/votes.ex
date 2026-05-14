@@ -1,7 +1,8 @@
 defmodule Bonfire.Poll.Votes do
   use Bonfire.Common.Utils
+  use Bonfire.Common.Repo
   use Arrows
-  import Bonfire.Poll
+  # import Bonfire.Poll
   import ActivityPub.Config, only: [is_in: 2]
   alias Bonfire.Poll.{Questions, Question, Vote}
   alias Ecto.Changeset
@@ -146,6 +147,31 @@ defmodule Bonfire.Poll.Votes do
     do: Edges.count_for_subject(__MODULE__, user, object, skip_boundary_check: true)
 
   def count(%{} = object, _), do: Edges.count(:vote, object, skip_boundary_check: true)
+
+  @doc """
+  Total vote count per question, as a single grouped SQL query.
+  Returns `%{question_id => count}`. Missing keys mean zero.
+
+  Joins Ranked (choices belonging to a question) → Edge (votes targeting
+  those choices) → Vote (filters edges to vote rows via `Vote.id == Edge.id`).
+  """
+  def counts_for_questions([]), do: %{}
+
+  def counts_for_questions(question_ids) when is_list(question_ids) do
+    from(r in Bonfire.Data.Assort.Ranked,
+      join: e in Bonfire.Data.Edges.Edge,
+      on: e.object_id == r.item_id,
+      join: v in Bonfire.Poll.Vote,
+      on: v.id == e.id,
+      where: r.scope_id in ^question_ids,
+      group_by: r.scope_id,
+      select: {r.scope_id, count(v.id)}
+    )
+    |> repo().all()
+    |> Map.new()
+  end
+
+  def counts_for_questions(_), do: %{}
 
   def vote(voter, question, choices, opts \\ [])
 
