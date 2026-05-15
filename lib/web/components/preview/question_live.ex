@@ -17,6 +17,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   def preloads(),
     do: [
       :post_content,
+      # :peered, # not sure if needed?
       choices: [
         :post_content,
         object_voted: [:vote],
