@@ -40,6 +40,7 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     |> assert_has_or_open_browser("[data-id=feed]", text: question_text)
     |> assert_has_or_open_browser("[data-id=activity_choice]", text: "yes")
     |> assert_has_or_open_browser("[data-id=activity_choice]", text: "no")
+    |> PhoenixTest.open_browser()
   end
 
   test "the same poll renders its options at its permalink (discussion view)" do
@@ -261,6 +262,29 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     # Proposal-phase artifacts are gone (suggest form, proposal-vote-slot preview).
     |> refute_has("[data-role=propose-form]")
     |> refute_has("[data-role=proposal-vote-slot]")
+  end
+
+  test "a poll with choices appears in the polls preset feed (/feed/polls)" do
+    account = Fake.fake_account!()
+    user = Fake.fake_user!(account)
+    conn = conn(user: user, account: account)
+
+    question_text = "Polls preset feed question"
+
+    {:ok, _question} =
+      fake_question_with_choices(
+        %{post_content: %{html_body: question_text}},
+        [%{name: "option one"}, %{name: "option two"}],
+        current_user: user,
+        boundary: "public"
+      )
+
+    conn
+    |> visit("/feed/polls")
+    |> wait_async()
+    |> assert_has_or_open_browser("[data-id=feed]", text: question_text)
+    |> assert_has_or_open_browser("[data-id=activity_choice]", text: "option one")
+    |> assert_has_or_open_browser("[data-id=activity_choice]", text: "option two")
   end
 
   test "submitting a suggestion adds it to the proposal-phase listing" do

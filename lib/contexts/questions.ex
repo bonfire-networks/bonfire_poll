@@ -98,6 +98,8 @@ defmodule Bonfire.Poll.Questions do
     end
   end
 
+  def voting_open?(_), do: false
+
   @doc "Returns true if voting has ended for the poll."
   def voting_ended?(%Question{voting_dates: voting_dates}) do
     case end_date(voting_dates) do
@@ -105,6 +107,8 @@ defmodule Bonfire.Poll.Questions do
       end_dt -> DateTime.compare(DateTime.utc_now(), end_dt) == :gt
     end
   end
+
+  def voting_ended?(_), do: false
 
   @doc "Returns true if proposal period is currently open for the poll."
   def proposal_open?(%Question{proposal_dates: proposal_dates}) do
@@ -122,6 +126,8 @@ defmodule Bonfire.Poll.Questions do
     end
   end
 
+  def proposal_open?(_), do: false
+
   @doc "Returns true if proposal period has ended for the poll."
   def proposal_ended?(%Question{proposal_dates: proposal_dates}) do
     case end_date(proposal_dates) do
@@ -129,6 +135,8 @@ defmodule Bonfire.Poll.Questions do
       end_dt -> DateTime.compare(DateTime.utc_now(), end_dt) == :gt
     end
   end
+
+  def proposal_ended?(_), do: false
 
   def end_date([_start, end_date]), do: end_date
   def end_date(_), do: nil

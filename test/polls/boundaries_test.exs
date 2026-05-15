@@ -175,7 +175,7 @@ defmodule Bonfire.Poll.BoundariesTest do
           [%{name: "yes"}, %{name: "no"}],
           current_user: author,
           boundary: "private",
-          to_circles: [{voters_circle.id, :interact}]
+          to_circles: [{voters_circle.id, :participate}]
         )
 
       [choice | _] = poll.choices
