@@ -67,7 +67,11 @@ defmodule Bonfire.Poll.Choices do
   defp indexed_map?(_), do: false
 
   defp choice_empty?(%{} = choice) do
-    name = e(choice, :name, nil) || e(choice, "name", nil)
+    name =
+      e(choice, :name, nil) || e(choice, "name", nil) ||
+        e(choice, :post_content, :name, nil) || e(choice, :post_content, "name", nil) ||
+        e(choice, "post_content", "name", nil) || e(choice, "post_content", :name, nil)
+
     is_nil(name) or String.trim(to_string(name)) == ""
   end
 
