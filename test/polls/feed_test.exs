@@ -27,6 +27,34 @@ defmodule Bonfire.Poll.FeedTest do
            "feed object should be a resolved Question struct, got: #{inspect(object.__struct__)}"
   end
 
+  test "poll choices are preloaded when loading feed with component preloads" do
+    user = fake_user!()
+
+    {:ok, question} =
+      fake_question_with_choices(%{}, [%{name: "Option A"}, %{name: "Option B"}],
+        current_user: user
+      )
+
+    %{edges: edges} =
+      FeedLoader.feed_postloaded(:local,
+        current_user: user,
+        preload_nested:
+          {[:activity, :object],
+           [{Bonfire.Poll.Question, Bonfire.Poll.Web.Preview.QuestionLive.preloads()}]}
+      )
+
+    poll_edge =
+      Enum.find(edges, fn edge ->
+        e(edge, :activity, :object_id, nil) == question.id
+      end)
+
+    assert poll_edge, "poll should appear in local feed"
+    object = e(poll_edge, :activity, :object, nil)
+    assert %Bonfire.Poll.Question{} = object
+    assert is_list(object.choices) and length(object.choices) == 2,
+           "choices should be preloaded, got: #{inspect(object.choices)}"
+  end
+
   test "voting_open? and proposal_open? do not crash on poll loaded from feed" do
     user = fake_user!()
 
