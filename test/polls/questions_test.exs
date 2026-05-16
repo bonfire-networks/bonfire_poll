@@ -1,5 +1,5 @@
 defmodule Bonfire.Poll.QuestionsTest do
-  use Bonfire.Poll.DataCase, async: true
+  use Bonfire.Poll.DataCase, async: false
   import Bonfire.Me.Fake
   import Bonfire.Poll.Fake
 

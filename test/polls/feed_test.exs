@@ -51,6 +51,7 @@ defmodule Bonfire.Poll.FeedTest do
     assert poll_edge, "poll should appear in local feed"
     object = e(poll_edge, :activity, :object, nil)
     assert %Bonfire.Poll.Question{} = object
+
     assert is_list(object.choices) and length(object.choices) == 2,
            "choices should be preloaded, got: #{inspect(object.choices)}"
   end
