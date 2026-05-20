@@ -142,12 +142,12 @@
                 data-role="propose-form"
               >
                 <input type="hidden" name="question_id" value={id(@object)}>
-                <label for={"propose_#{id(@object)}"} class="sr-only">
+                <label for={"propose_#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}_#{id(@object)}"} class="sr-only">
                   {l("Your suggestion")}
                 </label>
                 <input
                   type="text"
-                  id={"propose_#{id(@object)}"}
+                  id={"propose_#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}_#{id(@object)}"}
                   name="proposal[name]"
                   placeholder={l("Suggest an option")}
                   required
