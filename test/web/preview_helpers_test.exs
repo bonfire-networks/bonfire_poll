@@ -224,7 +224,11 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
           },
           false,
           nil,
-          %{counts_by_choice_id: %{"A" => 2}, vetoed_choice_ids: MapSet.new(), my_vote_weights: %{}}
+          %{
+            counts_by_choice_id: %{"A" => 2},
+            vetoed_choice_ids: MapSet.new(),
+            my_vote_weights: %{}
+          }
         )
 
       refute state.results_visible
@@ -242,7 +246,11 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
           },
           false,
           nil,
-          %{counts_by_choice_id: %{"A" => 2}, vetoed_choice_ids: MapSet.new(), my_vote_weights: %{}}
+          %{
+            counts_by_choice_id: %{"A" => 2},
+            vetoed_choice_ids: MapSet.new(),
+            my_vote_weights: %{}
+          }
         )
 
       refute locked_state.results_visible

@@ -249,7 +249,7 @@
                       voted_on={false}
                       user_score={nil}
                       has_voted_overall={false}
-                      results_visible={true}
+                      results_visible
                       is_winner={false}
                       is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
                       closed={closed}
