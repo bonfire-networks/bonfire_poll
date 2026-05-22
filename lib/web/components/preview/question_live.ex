@@ -1,6 +1,7 @@
 defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   use Bonfire.UI.Common.Web, :stateless_component
   alias Bonfire.Poll.Questions
+  alias Bonfire.Poll.Votes
   alias Bonfire.Poll.Web.Preview.ChoiceLive
 
   prop object, :any
@@ -10,6 +11,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   prop showing_within, :atom, default: nil
   prop cw, :boolean, default: nil
   prop is_remote, :boolean, default: false
+  prop vote_state, :any, default: nil
   prop thread_title, :any, default: nil
   prop hide_actions, :boolean, default: false
   prop activity_inception, :boolean, default: false
@@ -20,7 +22,8 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
       # :peered, # not sure if needed?
       choices: [
         :post_content,
-        object_voted: [:vote],
+        # Vote state is loaded through `Votes.preview_vote_state_for_*`, not
+        # `object_voted`, so totals and viewer state stay explicitly scoped.
         created: [creator: [:profile, :character]]
       ]
     ]
@@ -30,23 +33,43 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   end
 
   @doc "Pre-compute every value the template branches read, so the .sface stays flat."
-  def view_state(question, is_remote \\ false) do
+  def view_state(question, is_remote \\ false, current_user \\ nil, vote_state \\ nil) do
     choices = e(question, :choices, []) || []
     remote_stats = if is_remote, do: remote_poll_stats(question), else: empty_remote_stats()
     end_time = end_time(question, remote_stats)
-    counts = Enum.map(choices, &choice_vote_count(&1, remote_stats))
-    counts_by_choice_id = choices |> Enum.zip(counts) |> Map.new(fn {c, n} -> {id(c), n} end)
-    total_votes = max(Enum.sum(counts), remote_stats.total_votes)
+    voting_format = e(question, :voting_format, nil) || Questions.default_voting_format()
+
+    vote_state = preview_vote_state(question, is_remote, current_user, vote_state)
+    local_counts = e(vote_state, :counts_by_choice_id, %{})
+
+    vetoed_ids =
+      if voting_format == "weighted_multiple",
+        do: choice_ids(e(vote_state, :vetoed_choice_ids, [])),
+        else: []
+
+    my_votes =
+      vote_state
+      |> e(:my_vote_weights, %{})
+      |> Map.new(fn {choice_id, weight} -> {choice_id, weight_to_score(weight)} end)
+
+    counts_by_choice_id =
+      Map.new(choices, fn c ->
+        {id(c), choice_vote_count(c, remote_stats, Map.get(local_counts, id(c), 0))}
+      end)
+
+    total_votes = max(Enum.sum(Map.values(counts_by_choice_id)), remote_stats.total_votes)
 
     %{
       choices: choices,
-      has_voted: voted?(choices),
+      has_voted: my_votes != %{},
       counts_by_choice_id: counts_by_choice_id,
+      my_votes: my_votes,
+      vetoed_ids: vetoed_ids,
       end_time: end_time,
       closed: closed?(end_time),
       locked: results_locked?(question, end_time),
       winning_ids: winning_choice_ids(choices, &Map.get(counts_by_choice_id, id(&1), 0)),
-      voting_format: e(question, :voting_format, nil) || Questions.default_voting_format(),
+      voting_format: voting_format,
       total_votes: total_votes,
       proposal_open: Questions.proposal_open?(question),
       time_remaining_label: time_remaining(end_time),
@@ -55,25 +78,38 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
     }
   end
 
+  defp preview_vote_state(_question, true, _current_user, _vote_state),
+    do: Votes.empty_preview_vote_state()
+
+  defp preview_vote_state(question, _is_remote, _current_user, vote_state) when is_map(vote_state) do
+    if Map.has_key?(vote_state, :counts_by_choice_id) do
+      vote_state
+    else
+      Map.get(vote_state, id(question), Votes.empty_preview_vote_state())
+    end
+  end
+
+  defp preview_vote_state(question, _is_remote, current_user, _vote_state),
+    do: Votes.preview_vote_state_for_question(question, current_user)
+
+  defp choice_ids(%MapSet{} = ids), do: MapSet.to_list(ids)
+  defp choice_ids(ids) when is_list(ids), do: ids
+  defp choice_ids(_), do: []
+
   defp empty_remote_stats,
     do: %{voters_count: 0, total_votes: 0, choice_counts: %{}, end_time: nil}
 
-  @doc "Vote count for a choice, taking the higher of local and remote-stats counts."
-  def choice_vote_count(choice, remote_stats \\ %{})
+  @doc "Vote count for a choice: the higher of local aggregate and remote stats."
+  def choice_vote_count(choice, remote_stats \\ %{}, local_count \\ 0)
 
-  def choice_vote_count(choice, %{choice_counts: choice_counts}) when is_map(choice_counts) do
+  def choice_vote_count(choice, %{choice_counts: choice_counts}, local_count)
+      when is_map(choice_counts) do
     name = e(choice, :post_content, :name, nil)
-    max(local_vote_count(choice), Map.get(choice_counts, name, 0))
+    max(local_count || 0, Map.get(choice_counts, name, 0))
   end
 
-  def choice_vote_count(choice, _), do: local_vote_count(choice)
-
-  defp local_vote_count(choice) do
-    case e(choice, :object_voted, nil) do
-      votes when is_list(votes) -> length(votes)
-      _ -> 0
-    end
-  end
+  def choice_vote_count(_choice, _remote_stats, local_count),
+    do: local_count || 0
 
   @doc "Get remote poll stats from cached AP object"
   def remote_poll_stats(question) do
@@ -110,12 +146,12 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
     {opt["name"], count}
   end
 
-  @doc "True when the current user has already cast a vote on at least one choice."
-  def voted?(choices) when is_list(choices), do: Enum.any?(choices, &voted_on?/1)
-  def voted?(_), do: false
-
-  @doc "True when the current user has voted on this specific choice."
-  def voted_on?(choice), do: match?([_ | _], e(choice, :object_voted, nil))
+  @doc """
+  Maps a stored `vote_weight` to the score shown in the UI: `"∞"` for a veto
+  (the schema stores it as `nil`), otherwise the integer weight as-is.
+  """
+  def weight_to_score(nil), do: "∞"
+  def weight_to_score(weight) when is_integer(weight), do: weight
 
   @doc "True when the poll's deadline has passed."
   def closed?(end_time) when is_binary(end_time) do
@@ -165,21 +201,6 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   end
 
   def winning_choice_ids(_, _), do: []
-
-  @doc "True when any choice received a veto (`∞` sentinel) on a weighted poll."
-  def vetoed?(choices) when is_list(choices), do: Enum.any?(choices, &choice_vetoed?/1)
-  def vetoed?(_), do: false
-
-  @doc "True when this specific choice received any veto vote (`vote_weight: nil`)."
-  def choice_vetoed?(choice) do
-    case e(choice, :object_voted, nil) do
-      votes when is_list(votes) -> Enum.any?(votes, &veto_vote?/1)
-      _ -> false
-    end
-  end
-
-  defp veto_vote?(%{vote: %{vote_weight: nil}}), do: true
-  defp veto_vote?(_), do: false
 
   @doc "Calculate time remaining for a poll"
   def time_remaining(nil), do: nil

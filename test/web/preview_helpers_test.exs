@@ -19,12 +19,10 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
   defp choice(opts \\ []) do
     %{
       id: opts[:id] || Bonfire.Common.Text.random_string(),
-      object_voted: Keyword.get(opts, :object_voted, []),
+      post_content: opts[:post_content],
       created: opts[:created]
     }
   end
-
-  defp vote(weight), do: %{vote: %{vote_weight: weight}}
 
   defp future_dt(minutes_from_now) do
     DateTime.utc_now() |> DateTime.add(minutes_from_now * 60, :second)
@@ -53,40 +51,14 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
     end
   end
 
-  describe "ChoiceLive.voted_on?/1" do
-    test "true when object_voted contains at least one vote" do
-      assert C.voted_on?(choice(object_voted: [vote(1)]))
+  describe "QuestionLive.weight_to_score/1" do
+    test "maps a nil vote_weight (veto) to the ∞ sentinel" do
+      assert Q.weight_to_score(nil) == "∞"
     end
 
-    test "false when object_voted is missing or empty" do
-      refute C.voted_on?(%{})
-      refute C.voted_on?(choice(object_voted: []))
-      refute C.voted_on?(%{object_voted: nil})
-    end
-  end
-
-  describe "ChoiceLive.user_score/2" do
-    test "returns the raw vote_weight, not a weighted/averaged value" do
-      # Single user vote of -1 on a x3 weighted poll should still display
-      # as -1 (the face the user picked), not -3.
-      c = choice(object_voted: [vote(-1)])
-      assert C.user_score(c, %{weighting: 3}) == -1
-    end
-
-    test "veto vote (nil vote_weight) maps to the ∞ sentinel" do
-      c = choice(object_voted: [vote(nil)])
-      assert C.user_score(c, %{weighting: 3}) == "∞"
-    end
-
-    test "no vote → nil" do
-      assert C.user_score(choice(), %{weighting: 3}) == nil
-      assert C.user_score(choice(object_voted: []), %{weighting: 3}) == nil
-    end
-
-    test "all six standard sentiment scores round-trip" do
+    test "returns the raw integer weight unchanged" do
       for w <- [-2, -1, 0, 1, 2] do
-        c = choice(object_voted: [vote(w)])
-        assert C.user_score(c, %{weighting: 3}) == w
+        assert Q.weight_to_score(w) == w
       end
     end
   end
@@ -131,18 +103,6 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
   # ------------------------------------------------------------------
   # QuestionLive helpers
   # ------------------------------------------------------------------
-
-  describe "QuestionLive.voted?/1" do
-    test "true when any choice has at least one vote" do
-      assert Q.voted?([choice(), choice(object_voted: [vote(1)])])
-    end
-
-    test "false when no choice has any votes" do
-      refute Q.voted?([choice(), choice()])
-      refute Q.voted?([])
-      refute Q.voted?(nil)
-    end
-  end
 
   describe "QuestionLive.closed?/1" do
     test "true for past DateTime, false for future DateTime, false for nil" do
@@ -195,17 +155,22 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
 
   describe "QuestionLive.winning_choice_ids/2" do
     test "single clear winner returns one id" do
-      a = choice(id: "A", object_voted: [vote(1), vote(1)])
-      b = choice(id: "B", object_voted: [vote(1)])
+      a = choice(id: "A")
+      b = choice(id: "B")
 
-      assert Q.winning_choice_ids([a, b]) == ["A"]
+      count = fn
+        %{id: "A"} -> 2
+        _ -> 1
+      end
+
+      assert Q.winning_choice_ids([a, b], count) == ["A"]
     end
 
     test "ties return every tied id" do
-      a = choice(id: "A", object_voted: [vote(1), vote(1)])
-      b = choice(id: "B", object_voted: [vote(1), vote(1)])
+      a = choice(id: "A")
+      b = choice(id: "B")
 
-      assert Enum.sort(Q.winning_choice_ids([a, b])) == ["A", "B"]
+      assert Enum.sort(Q.winning_choice_ids([a, b], fn _ -> 2 end)) == ["A", "B"]
     end
 
     test "empty result when no choice received any votes" do
@@ -216,22 +181,37 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
       a = choice(id: "A")
       b = choice(id: "B")
       assert Q.winning_choice_ids([a, b], fn _ -> 0 end) == []
-      assert Q.winning_choice_ids([a, b], fn c -> if c.id == "B", do: 7, else: 1 end) == ["B"]
+
+      count = fn
+        %{id: "B"} -> 7
+        _ -> 1
+      end
+
+      assert Q.winning_choice_ids([a, b], count) == ["B"]
     end
   end
 
-  describe "QuestionLive vetoed predicates" do
-    test "choice_vetoed?/1 picks up the ∞ sentinel from a single vote" do
-      assert Q.choice_vetoed?(choice(object_voted: [vote(nil)]))
-      refute Q.choice_vetoed?(choice(object_voted: [vote(-2)]))
-      refute Q.choice_vetoed?(choice(object_voted: []))
-      refute Q.choice_vetoed?(choice())
-    end
+  describe "QuestionLive.view_state/4" do
+    test "uses explicit vote state for counts, vetoes, and viewer votes" do
+      a = choice(id: "A")
+      b = choice(id: "B")
 
-    test "vetoed?/1 returns true when any choice has a veto vote" do
-      assert Q.vetoed?([choice(object_voted: [vote(2)]), choice(object_voted: [vote(nil)])])
-      refute Q.vetoed?([choice(object_voted: [vote(2)]), choice(object_voted: [vote(-1)])])
-      refute Q.vetoed?([])
+      state =
+        Q.view_state(
+          %{id: "question", choices: [a, b], voting_format: "weighted_multiple"},
+          false,
+          nil,
+          %{
+            counts_by_choice_id: %{"A" => 3, "B" => 1},
+            vetoed_choice_ids: MapSet.new(["B"]),
+            my_vote_weights: %{"B" => nil}
+          }
+        )
+
+      assert state.total_votes == 4
+      assert state.winning_ids == ["A"]
+      assert state.my_votes == %{"B" => "∞"}
+      assert "B" in state.vetoed_ids
     end
   end
 

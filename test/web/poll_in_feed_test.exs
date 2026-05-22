@@ -63,6 +63,41 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     |> assert_has_or_open_browser("[data-id=activity_choice]", text: "second")
   end
 
+  test "another user's vote does not show as the viewer's own 'your vote'" do
+    # Regression for the unscoped `object_voted` leak: after Alice voted, Bob
+    # (who hasn't voted) saw a "Your vote" / "Voted" indicator on Alice's
+    # choice. Bob must instead still see the Vote action bar.
+    alice_account = Fake.fake_account!()
+    alice = Fake.fake_user!(alice_account)
+
+    bob_account = Fake.fake_account!()
+    bob = Fake.fake_user!(bob_account)
+
+    {:ok, question} =
+      fake_question_with_choices(
+        %{
+          post_content: %{html_body: "Scoped vote visibility"},
+          voting_format: "single",
+          voting_dates: [DateTime.utc_now()]
+        },
+        [%{name: "alpha"}, %{name: "beta"}],
+        current_user: alice,
+        boundary: "public"
+      )
+
+    choice = hd(question.choices)
+
+    assert {:ok, _} =
+             Bonfire.Poll.Votes.vote(alice, question, [%{choice_id: choice.id, weight: 1}])
+
+    conn(user: bob, account: bob_account)
+    |> visit("/discussion/#{question.id}")
+    |> wait_async()
+    |> refute_has("[data-role=your-vote]")
+    |> refute_has("[data-role=voted-indicator]")
+    |> assert_has_or_open_browser("[data-role=submit-vote]")
+  end
+
   test "a signed-in viewer sees the Vote action bar on an unvoted poll" do
     account = Fake.fake_account!()
     user = Fake.fake_user!(account)

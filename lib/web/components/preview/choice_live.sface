@@ -1,4 +1,4 @@
-{#case voted_on?(@object)}
+{#case @voted_on}
   {#match voted_on}
     <div
       data-id="activity_choice"
@@ -73,7 +73,7 @@
                     />
 
                     {#if voted_on and @voting_format == "weighted_multiple"}
-                      {#case user_score(@object, @question)}
+                      {#case @user_score}
                         {#match nil}
                         {#match score}
                           {#case score_label(score)}
@@ -179,7 +179,7 @@
               compact={@compact}
               is_winner={false}
             />
-            {#case user_score(@object, @question)}
+            {#case @user_score}
               {#match nil}
               {#match score}
                 {#case score_label(score)}

@@ -1,7 +1,6 @@
 defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   use Bonfire.UI.Common.Web, :stateless_component
   alias Bonfire.Poll.Votes
-  alias Bonfire.Poll.Web.Preview.QuestionLive
   alias Bonfire.Poll.Web.Preview.ChoiceContentLive
   alias Bonfire.Poll.VotingLive
 
@@ -19,6 +18,8 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   prop vote, :boolean, default: false
   prop vote_count, :integer, default: 0
   prop total_votes, :integer, default: 0
+  prop voted_on, :boolean, default: false
+  prop user_score, :any, default: nil
   prop has_voted_overall, :boolean, default: false
   prop results_visible, :boolean, default: false
   prop is_winner, :boolean, default: false
@@ -43,20 +44,6 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
     do: round(vote_count * 100 / total)
 
   def percent(_, _), do: 0
-
-  defdelegate voted_on?(choice), to: QuestionLive
-
-  @doc """
-  Raw `vote_weight` the user picked (`-2`..`2`), `"∞"` for a veto (stored as
-  `nil` by the schema's `empty_values`), or `nil` when no vote yet.
-  """
-  def user_score(choice, _question) do
-    case e(choice, :object_voted, nil) do
-      [%{vote: %{vote_weight: nil}} | _] -> "∞"
-      [%{vote: %{vote_weight: w}} | _] when is_integer(w) -> w
-      _ -> nil
-    end
-  end
 
   def score_label(score) do
     Enum.find(Votes.scores(), fn {value, _name, _icon, _desc} -> value == score end)

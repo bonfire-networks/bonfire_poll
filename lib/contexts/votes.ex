@@ -173,6 +173,133 @@ defmodule Bonfire.Poll.Votes do
 
   def counts_for_questions(_), do: %{}
 
+  @doc "Empty read model for a question's poll preview vote state."
+  def empty_preview_vote_state,
+    do: %{counts_by_choice_id: %{}, vetoed_choice_ids: MapSet.new(), my_vote_weights: %{}}
+
+  @doc """
+  Vote state for a single question preview.
+
+  This keeps the preview component from deriving totals or viewer-specific
+  state from preloaded vote edges. Use `preview_vote_state_for_questions/2`
+  when rendering many polls.
+  """
+  def preview_vote_state_for_question(question, current_user \\ nil) do
+    question_id = id(question)
+
+    question
+    |> List.wrap()
+    |> preview_vote_state_for_questions(current_user)
+    |> Map.get(question_id, empty_preview_vote_state())
+  end
+
+  @doc """
+  Vote state for many question previews, keyed by question id.
+
+  Each value contains:
+
+    * `:counts_by_choice_id` - aggregate vote counts, `%{choice_id => count}`
+    * `:vetoed_choice_ids` - choices with at least one veto vote
+    * `:my_vote_weights` - the current viewer's own votes, `%{choice_id => weight}`
+
+  Missing choices mean zero votes / no viewer vote.
+  """
+  def preview_vote_state_for_questions(questions, current_user \\ nil) do
+    question_ids = question_ids(questions)
+    counts_by_question = choice_counts_for_questions(question_ids)
+    vetoes_by_question = vetoed_choice_ids_for_questions(question_ids)
+    my_votes_by_question = voter_choice_weights_for_questions(current_user, question_ids)
+
+    Map.new(question_ids, fn question_id ->
+      {question_id,
+       %{
+         counts_by_choice_id: Map.get(counts_by_question, question_id, %{}),
+         vetoed_choice_ids: Map.get(vetoes_by_question, question_id, MapSet.new()),
+         my_vote_weights: Map.get(my_votes_by_question, question_id, %{})
+       }}
+    end)
+  end
+
+  defp choice_counts_for_questions(questions) do
+    question_ids = question_ids(questions)
+
+    if question_ids == [] do
+      %{}
+    else
+      questions_votes_query(question_ids)
+      |> group_by([ranked: r], [r.scope_id, r.item_id])
+      |> select([ranked: r, vote: v], {r.scope_id, r.item_id, count(v.id)})
+      |> repo().all()
+      |> nested_choice_map()
+    end
+  end
+
+  defp vetoed_choice_ids_for_questions(questions) do
+    question_ids = question_ids(questions)
+
+    if question_ids == [] do
+      %{}
+    else
+      questions_votes_query(question_ids)
+      |> where([vote: v], is_nil(v.vote_weight))
+      |> distinct(true)
+      |> select([ranked: r], {r.scope_id, r.item_id})
+      |> repo().all()
+      |> Enum.reduce(%{}, fn {question_id, choice_id}, acc ->
+        Map.update(acc, question_id, MapSet.new([choice_id]), &MapSet.put(&1, choice_id))
+      end)
+    end
+  end
+
+  defp voter_choice_weights_for_questions(nil, _questions), do: %{}
+
+  defp voter_choice_weights_for_questions(voter, questions) do
+    question_ids = question_ids(questions)
+
+    case {id(voter), question_ids} do
+      {voter_id, [_ | _]} when is_binary(voter_id) ->
+        questions_votes_query(question_ids)
+        |> where([edge: e], e.subject_id == ^voter_id)
+        |> select([ranked: r, vote: v], {r.scope_id, r.item_id, v.vote_weight})
+        |> repo().all()
+        |> nested_choice_map()
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp question_ids(questions) do
+    questions
+    |> List.wrap()
+    |> Enum.map(&id/1)
+    |> Enum.filter(&is_binary/1)
+    |> Enum.uniq()
+  end
+
+  defp nested_choice_map(rows) do
+    Enum.reduce(rows, %{}, fn {question_id, choice_id, value}, acc ->
+      put_nested_choice(acc, question_id, choice_id, value)
+    end)
+  end
+
+  defp put_nested_choice(acc, question_id, choice_id, value) do
+    Map.update(acc, question_id, %{choice_id => value}, &Map.put(&1, choice_id, value))
+  end
+
+  defp questions_votes_query(question_ids) do
+    from(r in Bonfire.Data.Assort.Ranked,
+      as: :ranked,
+      join: e in Bonfire.Data.Edges.Edge,
+      as: :edge,
+      on: e.object_id == r.item_id,
+      join: v in Bonfire.Poll.Vote,
+      as: :vote,
+      on: v.id == e.id,
+      where: r.scope_id in ^question_ids
+    )
+  end
+
   def vote(voter, question, choices, opts \\ [])
 
   #   def vote(%{} = voter, %{} = question, choices, opts) do

@@ -1,8 +1,10 @@
-{#case view_state(@object, @is_remote)}
+{#case view_state(@object, @is_remote, current_user(@__context__), @vote_state)}
   {#match %{
       choices: choices,
       has_voted: has_voted,
       counts_by_choice_id: counts_by_choice_id,
+      my_votes: my_votes,
+      vetoed_ids: vetoed_ids,
       end_time: end_time,
       closed: closed,
       locked: locked,
@@ -171,7 +173,7 @@
             x-data="{ hasSelection: false }"
             x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
           >
-            {#if voting_format == "weighted_multiple" and vetoed?(choices)}
+            {#if voting_format == "weighted_multiple" and vetoed_ids != []}
               {!-- Soft entrance: empathetic, not celebratory. Calm fade-in. --}
               <div
                 x-data="{ shown: window.matchMedia('(prefers-reduced-motion: reduce)').matches }"
@@ -217,10 +219,12 @@
                   vote={not closed and not is_nil(current_user_id(@__context__))}
                   vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
                   total_votes={total_votes}
+                  voted_on={Map.has_key?(my_votes, id(choice))}
+                  user_score={Map.get(my_votes, id(choice))}
                   has_voted_overall={has_voted}
                   results_visible={(closed or has_voted) and not locked}
                   is_winner={closed and id(choice) in winning_ids and total_votes > 0}
-                  is_vetoed={voting_format == "weighted_multiple" and choice_vetoed?(choice)}
+                  is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
                   closed={closed}
                 />
               {/for}

@@ -171,4 +171,90 @@ defmodule Bonfire.Poll.VotesTest do
       assert stored_after_revote == -1
     end
   end
+
+  describe "preview_vote_state_for_questions/2" do
+    test "returns aggregate counts, vetoes, and only the current viewer's own votes" do
+      author = fake_user!()
+      alice = fake_user!()
+      bob = fake_user!()
+      carol = fake_user!()
+
+      {:ok, question} =
+        fake_question_with_choices(
+          %{voting_format: "weighted_multiple", voting_dates: [DateTime.utc_now()]},
+          [%{name: "A"}, %{name: "B"}],
+          current_user: author
+        )
+
+      [a, b] = question.choices
+
+      assert {:ok, _} = Votes.vote(alice, question, [%{choice_id: a.id, weight: "∞"}])
+      assert {:ok, _} = Votes.vote(bob, question, [%{choice_id: b.id, weight: 2}])
+      assert {:ok, _} = Votes.vote(carol, question, [%{choice_id: b.id, weight: -1}])
+
+      states = Votes.preview_vote_state_for_questions([question], alice)
+      state = states[question.id]
+
+      assert state.counts_by_choice_id == %{a.id => 1, b.id => 2}
+      assert MapSet.member?(state.vetoed_choice_ids, a.id)
+      refute MapSet.member?(state.vetoed_choice_ids, b.id)
+      assert state.my_vote_weights == %{a.id => nil}
+    end
+
+    test "keeps counts, vetoes, and viewer votes separated for multiple questions" do
+      author = fake_user!()
+      alice = fake_user!()
+      bob = fake_user!()
+
+      {:ok, first_question} =
+        fake_question_with_choices(
+          %{voting_format: "weighted_multiple", voting_dates: [DateTime.utc_now()]},
+          [%{name: "A"}, %{name: "B"}],
+          current_user: author
+        )
+
+      {:ok, second_question} =
+        fake_question_with_choices(
+          %{voting_format: "weighted_multiple", voting_dates: [DateTime.utc_now()]},
+          [%{name: "C"}, %{name: "D"}],
+          current_user: author
+        )
+
+      [a, b] = first_question.choices
+      [c, d] = second_question.choices
+
+      assert {:ok, _} = Votes.vote(alice, first_question, [%{choice_id: a.id, weight: "∞"}])
+      assert {:ok, _} = Votes.vote(bob, first_question, [%{choice_id: b.id, weight: 2}])
+      assert {:ok, _} = Votes.vote(alice, second_question, [%{choice_id: c.id, weight: 2}])
+      assert {:ok, _} = Votes.vote(bob, second_question, [%{choice_id: d.id, weight: -1}])
+
+      first_question_id = first_question.id
+      second_question_id = second_question.id
+
+      assert %{
+               ^first_question_id => first_state,
+               ^second_question_id => second_state
+             } = Votes.preview_vote_state_for_questions([first_question, second_question], alice)
+
+      assert first_state.counts_by_choice_id == %{a.id => 1, b.id => 1}
+      assert first_state.my_vote_weights == %{a.id => nil}
+      assert MapSet.member?(first_state.vetoed_choice_ids, a.id)
+      refute Map.has_key?(first_state.counts_by_choice_id, c.id)
+
+      assert second_state.counts_by_choice_id == %{c.id => 1, d.id => 1}
+      assert second_state.my_vote_weights == %{c.id => 2}
+      assert second_state.vetoed_choice_ids == MapSet.new()
+      refute Map.has_key?(second_state.counts_by_choice_id, a.id)
+    end
+
+    test "returns empty state for questions with no votes" do
+      {:ok, question} =
+        fake_question_with_choices(%{voting_dates: [DateTime.utc_now()]}, [%{name: "A"}])
+
+      question_id = question.id
+
+      assert %{^question_id => state} = Votes.preview_vote_state_for_questions([question], nil)
+      assert state == Votes.empty_preview_vote_state()
+    end
+  end
 end
