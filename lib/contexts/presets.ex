@@ -159,9 +159,11 @@ defmodule Bonfire.Poll.Presets do
   @doc "L2 toggles surfaced inline per style; anything else lives in Advanced."
   @spec visible_toggles(key()) :: [atom()]
   def visible_toggles(:quick), do: []
-  def visible_toggles(:group_decision), do: [:proposal_phase, :hide_results]
-  def visible_toggles(:consensus), do: [:hide_results, :allow_vetoes]
-  def visible_toggles(:custom), do: tuning_keys()
+  # TODO: Restore `:hide_results` here after Question persists it and
+  # `to_question_attrs/3` carries the tuning value into that schema field.
+  def visible_toggles(:group_decision), do: [:proposal_phase]
+  def visible_toggles(:consensus), do: [:allow_vetoes]
+  def visible_toggles(:custom), do: [:proposal_phase, :allow_vetoes]
   def visible_toggles(_), do: []
 
   @doc "Whether the inline Single/Multiple-choice control applies to this style."

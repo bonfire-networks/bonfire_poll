@@ -122,6 +122,14 @@ defmodule Bonfire.Poll.PresetsTest do
     end
   end
 
+  describe "visible_toggles/1" do
+    test "does not show hide_results until it is persisted on questions" do
+      refute :hide_results in Presets.visible_toggles(:group_decision)
+      refute :hide_results in Presets.visible_toggles(:consensus)
+      refute :hide_results in Presets.visible_toggles(:custom)
+    end
+  end
+
   describe "to_question_attrs/3" do
     test "Quick poll → single format, weighting 1, voting_dates only" do
       attrs = Presets.to_question_attrs(:quick)

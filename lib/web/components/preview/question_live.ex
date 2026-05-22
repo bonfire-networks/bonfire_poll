@@ -59,6 +59,10 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
 
     total_votes = max(Enum.sum(Map.values(counts_by_choice_id)), remote_stats.total_votes)
 
+    closed = closed?(end_time)
+    locked = results_locked?(question, end_time)
+    results_visible = (closed or my_votes != %{}) and not locked
+
     %{
       choices: choices,
       has_voted: my_votes != %{},
@@ -66,8 +70,10 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
       my_votes: my_votes,
       vetoed_ids: vetoed_ids,
       end_time: end_time,
-      closed: closed?(end_time),
-      locked: results_locked?(question, end_time),
+      closed: closed,
+      locked: locked,
+      results_visible: results_visible,
+      results_toggleable: not closed and my_votes == %{} and not locked,
       winning_ids: winning_choice_ids(choices, &Map.get(counts_by_choice_id, id(&1), 0)),
       voting_format: voting_format,
       total_votes: total_votes,

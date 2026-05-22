@@ -8,6 +8,8 @@
       end_time: end_time,
       closed: closed,
       locked: locked,
+      results_visible: results_visible,
+      results_toggleable: results_toggleable,
       winning_ids: winning_ids,
       voting_format: voting_format,
       total_votes: total_votes,
@@ -206,27 +208,76 @@
 
             <div class="divide-y divide-base-content/8">
               {#for {choice, idx} <- Enum.with_index(choices)}
-                <ChoiceLive
-                  question={question_without_choices}
-                  object={choice}
-                  index={idx}
-                  viewing_main_object={@viewing_main_object}
-                  showing_within={@showing_within}
-                  is_remote={@is_remote}
-                  hide_actions={@hide_actions}
-                  voting_format={voting_format}
-                  compact={@viewing_main_object != true}
-                  vote={not closed and not is_nil(current_user_id(@__context__))}
-                  vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
-                  total_votes={total_votes}
-                  voted_on={Map.has_key?(my_votes, id(choice))}
-                  user_score={Map.get(my_votes, id(choice))}
-                  has_voted_overall={has_voted}
-                  results_visible={(closed or has_voted) and not locked}
-                  is_winner={closed and id(choice) in winning_ids and total_votes > 0}
-                  is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
-                  closed={closed}
-                />
+                {#if results_toggleable}
+                  <div x-show="!showResults">
+                    <ChoiceLive
+                      question={question_without_choices}
+                      object={choice}
+                      index={idx}
+                      viewing_main_object={@viewing_main_object}
+                      showing_within={@showing_within}
+                      is_remote={@is_remote}
+                      hide_actions={@hide_actions}
+                      voting_format={voting_format}
+                      compact={@viewing_main_object != true}
+                      vote={not is_nil(current_user_id(@__context__))}
+                      vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
+                      total_votes={total_votes}
+                      voted_on={false}
+                      user_score={nil}
+                      has_voted_overall={false}
+                      results_visible={false}
+                      is_winner={false}
+                      is_vetoed={false}
+                      closed={closed}
+                    />
+                  </div>
+                  <div x-show="showResults" x-cloak>
+                    <ChoiceLive
+                      question={question_without_choices}
+                      object={choice}
+                      index={idx}
+                      viewing_main_object={@viewing_main_object}
+                      showing_within={@showing_within}
+                      is_remote={@is_remote}
+                      hide_actions={@hide_actions}
+                      voting_format={voting_format}
+                      compact={@viewing_main_object != true}
+                      vote={false}
+                      vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
+                      total_votes={total_votes}
+                      voted_on={false}
+                      user_score={nil}
+                      has_voted_overall={false}
+                      results_visible={true}
+                      is_winner={false}
+                      is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
+                      closed={closed}
+                    />
+                  </div>
+                {#else}
+                  <ChoiceLive
+                    question={question_without_choices}
+                    object={choice}
+                    index={idx}
+                    viewing_main_object={@viewing_main_object}
+                    showing_within={@showing_within}
+                    is_remote={@is_remote}
+                    hide_actions={@hide_actions}
+                    voting_format={voting_format}
+                    compact={@viewing_main_object != true}
+                    vote={not closed and not is_nil(current_user_id(@__context__))}
+                    vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
+                    total_votes={total_votes}
+                    voted_on={Map.has_key?(my_votes, id(choice))}
+                    user_score={Map.get(my_votes, id(choice))}
+                    has_voted_overall={has_voted}
+                    results_visible={results_visible}
+                    is_winner={closed and id(choice) in winning_ids and total_votes > 0}
+                    is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
+                    closed={closed}
+                  />
+                {/if}
               {/for}
             </div>
 

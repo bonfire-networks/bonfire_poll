@@ -213,6 +213,60 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
       assert state.my_votes == %{"B" => "∞"}
       assert "B" in state.vetoed_ids
     end
+
+    test "allows local results to be toggled before voting when not locked" do
+      state =
+        Q.view_state(
+          %{
+            id: "question",
+            choices: [choice(id: "A")],
+            voting_dates: [DateTime.utc_now(), future_dt(60)]
+          },
+          false,
+          nil,
+          %{counts_by_choice_id: %{"A" => 2}, vetoed_choice_ids: MapSet.new(), my_vote_weights: %{}}
+        )
+
+      refute state.results_visible
+      assert state.results_toggleable
+    end
+
+    test "does not expose the results toggle when results are locked or already visible" do
+      locked_state =
+        Q.view_state(
+          %{
+            id: "question",
+            choices: [choice(id: "A")],
+            hide_results: true,
+            voting_dates: [DateTime.utc_now(), future_dt(60)]
+          },
+          false,
+          nil,
+          %{counts_by_choice_id: %{"A" => 2}, vetoed_choice_ids: MapSet.new(), my_vote_weights: %{}}
+        )
+
+      refute locked_state.results_visible
+      refute locked_state.results_toggleable
+
+      voted_state =
+        Q.view_state(
+          %{
+            id: "question",
+            choices: [choice(id: "A")],
+            voting_dates: [DateTime.utc_now(), future_dt(60)]
+          },
+          false,
+          nil,
+          %{
+            counts_by_choice_id: %{"A" => 2},
+            vetoed_choice_ids: MapSet.new(),
+            my_vote_weights: %{"A" => 1}
+          }
+        )
+
+      assert voted_state.results_visible
+      refute voted_state.results_toggleable
+    end
   end
 
   describe "QuestionLive.time_remaining/1" do
