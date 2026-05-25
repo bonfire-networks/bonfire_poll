@@ -44,7 +44,6 @@ defmodule Bonfire.Poll.Acts.Choices.Create do
 
         attrs =
           Keyword.get(epic.assigns[:options], attrs_key, %{})
-          |> debug("choice attrs in act")
 
         # Actually create and link choices
         with %{} = question <- epic.assigns[on] || {:error, "No question found to add choices to"},

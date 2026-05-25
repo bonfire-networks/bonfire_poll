@@ -86,13 +86,11 @@ defmodule Bonfire.Poll.LiveHandler do
              to_circles: final_to_circles,
              verb_grants: verb_grants,
              context_id: e(params, "context_id", nil)
-           ]
-           |> debug("create_poll opts"),
+           ],
          {:ok, published} <- Questions.create(opts) do
       published =
         published
         |> repo().maybe_preload([:post_content])
-        |> debug("created!")
 
       # No auto-redirect: the question's permalink is a generic Discussion
       # thread that can't render polls. Offer a "Show" link in the flash instead.

@@ -102,7 +102,7 @@ defmodule Bonfire.Poll.Votes do
       case Map.get(poll, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format() do
         "weighted_multiple" ->
           # Get all votes for this choice and calculate weights
-          for_choice([object: choice], opts)
+          for_choice(choice, opts)
           ~> calculate_total(poll)
 
         _ ->
@@ -115,15 +115,17 @@ defmodule Bonfire.Poll.Votes do
   end
 
   @doc """
-  Returns votes count for a choice, only if poll voting is closed or owned by current user.
-
-  You'd usually want to use `calculate_if_visible/3` instead.
-
-  Returns nil if results are not visible.
+  Returns the average vote weight (rounded) for a choice, gated on result
+  visibility. Returns nil if results are not visible.
   """
-  defp count_if_visible(choice, poll, opts \\ []) do
+  def calculate_average_if_visible(choice, poll, opts \\ []) do
     if results_visible?(choice, poll, opts) do
-      count(choice, opts)
+      weighting = Map.get(poll, :weighting, 1) || 1
+      votes = for_choice(choice, opts) |> List.wrap()
+
+      votes
+      |> calculate_total(weighting)
+      |> calculate_average_base_score(length(votes))
     else
       nil
     end
@@ -344,7 +346,6 @@ defmodule Bonfire.Poll.Votes do
         with {:ok, votes} when is_list(votes) <-
                choices
                |> load_choices(voter, opts)
-               |> debug("loaded_choices being voted on")
                |> Enum.map(&register_vote_choice(voter, question, &1, opts))
                |> all_oks_or_error(),
              {:ok, vote_activity} <- send_vote_activity(voter, question, votes, opts) do
@@ -357,7 +358,6 @@ defmodule Bonfire.Poll.Votes do
   defp load_choices(choices_weights, voter, opts) do
     choices_weights =
       List.wrap(choices_weights)
-      |> debug("input_choices_weights")
       |> Enum.reduce(%{}, fn
         %{choice_id: cid, weight: w}, acc -> Map.put(acc, cid, w)
         %{choice_id: cid}, acc -> Map.put(acc, cid, 1)
@@ -378,7 +378,6 @@ defmodule Bonfire.Poll.Votes do
         ]
     )
     |> Objects.preload_creator()
-    |> debug()
     |> Enum.map(fn %{id: id} = choice ->
       {choice, choices_weights[id] || 1}
     end)
@@ -394,7 +393,6 @@ defmodule Bonfire.Poll.Votes do
       {:error, e} ->
         case get(voter, choice) do
           {:ok, vote} ->
-            debug(vote, "the user already voted on this")
             {:ok, vote}
 
           _ ->
@@ -407,19 +405,16 @@ defmodule Bonfire.Poll.Votes do
     # don't create an activity or set ACLs on each individual vote on a choice, since we do that in `send_vote_activity/4` instead
     Edges.changeset_base_with_creator(Vote, voter, choice, opts)
     |> Vote.changeset(%{vote_weight: weight || 1})
-    |> debug("csss")
     |> Edges.insert(voter, choice)
   end
 
   def send_vote_activity(%{} = voter, %{} = question, registered_votes, opts) do
     question =
       Objects.preload_creator(question)
-      |> debug("the object")
 
     object_creator =
-      (opts[:object_creator] ||
-         Objects.object_creator(question))
-      |> debug("the creator")
+      opts[:object_creator] ||
+        Objects.object_creator(question)
 
     choice_creators =
       registered_votes
@@ -455,7 +450,6 @@ defmodule Bonfire.Poll.Votes do
           {:ok, vote_activity} ->
             {:ok,
              vote_activity
-             |> debug("the user already voted on this")
              |> Map.put(:votes, registered_votes)}
 
           _ ->
@@ -466,7 +460,6 @@ defmodule Bonfire.Poll.Votes do
 
   defp do_create_vote_activity(voter, question, opts) do
     Edges.changeset(Vote, voter, :vote, question, opts)
-    |> debug("csss")
     |> Edges.insert(voter, question)
   end
 
@@ -495,7 +488,7 @@ defmodule Bonfire.Poll.Votes do
       3
 
       iex> Bonfire.Poll.Votes.calculate_total([%{vote_weight: -1}, %{vote_weight: 2}], 2)
-      3
+      0
   """
   def calculate_total(votes, weighting, sum \\ 0)
 
@@ -570,7 +563,7 @@ defmodule Bonfire.Poll.Votes do
 
   defp find_score(value, scores \\ scores()) do
     Enum.find(scores, fn
-      {value, _, _, _} -> true
+      {^value, _, _, _} -> true
       _ -> false
     end)
   end

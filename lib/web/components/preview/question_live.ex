@@ -87,7 +87,8 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   defp preview_vote_state(_question, true, _current_user, _vote_state),
     do: Votes.empty_preview_vote_state()
 
-  defp preview_vote_state(question, _is_remote, _current_user, vote_state) when is_map(vote_state) do
+  defp preview_vote_state(question, _is_remote, _current_user, vote_state)
+       when is_map(vote_state) do
     if Map.has_key?(vote_state, :counts_by_choice_id) do
       vote_state
     else

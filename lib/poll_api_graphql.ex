@@ -129,7 +129,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field(:votes_result_average, :integer) do
         resolve(fn choice, _, %{source: poll, context: %{current_user: user}} ->
-          {:ok, Bonfire.Poll.Votes.calculate_if_visible(choice, poll, current_user: user)}
+          {:ok, Bonfire.Poll.Votes.calculate_average_if_visible(choice, poll, current_user: user)}
         end)
       end
     end
@@ -201,7 +201,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     def list_polls(_parent, args, info) do
       {pagination_args, filters} =
         Pagination.pagination_args_filter(args)
-        |> debug()
 
       Questions.list_paginated(filters,
         current_user: GraphQL.current_user(info),
@@ -231,7 +230,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
           question_attrs: args
           #  boundary: e(params, "to_boundaries", "mentions")
         ]
-        |> debug("opts with attrs")
         |> Questions.create()
       else
         {:error, "Not authenticated"}
@@ -258,7 +256,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
                      error(other, "invalid input")
                      raise Bonfire.Fail, :invalid_argument
                  end)
-                 |> debug("votes")
                ),
              do: {:ok, e(f, :activity, nil) || f}
       else

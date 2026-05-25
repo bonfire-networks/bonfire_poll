@@ -297,7 +297,6 @@ defmodule Bonfire.Poll.Questions do
     question =
       question
       |> repo().maybe_preload(choices: [:post_content])
-      |> debug("preloaded question for ap_publish_activity")
 
     choices = question.choices || []
 
@@ -313,11 +312,9 @@ defmodule Bonfire.Poll.Questions do
 
         #  TODO: avoid n+1
         vote_count =
-          with {:ok, votes} <- Votes.for_choice(choice, current_user: subject) do
-            votes = choice.votes || []
-            # FIXME: should we instead do a weighted count if necessary?
-            Enum.count(votes, fn v -> v.choice_id == choice.id end)
-          end
+          Votes.for_choice(choice, current_user: subject)
+          |> List.wrap()
+          |> length()
 
         %{
           "type" => "Note",
@@ -366,7 +363,6 @@ defmodule Bonfire.Poll.Questions do
         # "votersCount" => voters_count # TODO!
       })
       |> Map.put(options_key, options)
-      |> debug("composed question_obj")
 
     # Boundary/circle logic (reuse from Posts)
     is_public = Bonfire.Boundaries.object_public?(question)
@@ -395,7 +391,6 @@ defmodule Bonfire.Poll.Questions do
             "interactionPolicy" => interaction_policy
           })
       }
-      |> debug("ap activity params")
 
     ap_create_or_update_activity(verb, params)
   end
@@ -432,7 +427,6 @@ defmodule Bonfire.Poll.Questions do
 
     opts =
       ap_receive_opts(creator, activity, question_data, attrs)
-      |> debug("ap receive opts")
 
     case type do
       "Create" ->
@@ -440,11 +434,10 @@ defmodule Bonfire.Poll.Questions do
 
       "Update" ->
         with {:ok, question} <-
-               get_by_uri(ap_id, current_user: creator) |> debug("find question to update"),
+               get_by_uri(ap_id, current_user: creator),
              # TODO: also update circles/boundaries if changed?
              {:ok, question} <-
-               update_question_and_choices(creator, question, opts)
-               |> debug("question & choices updated") do
+               update_question_and_choices(creator, question, opts) do
           {:ok, question}
         end
     end
@@ -462,8 +455,7 @@ defmodule Bonfire.Poll.Questions do
     attrs = opts[:question_attrs] || %{}
 
     with {:ok, question} <-
-           update_question(creator, question, Map.delete(attrs, :choices), opts)
-           |> debug("question updated"),
+           update_question(creator, question, Map.delete(attrs, :choices), opts),
          {:ok, question} <- replace_choices(creator, question, attrs[:choices]) do
       {:ok, question}
     end

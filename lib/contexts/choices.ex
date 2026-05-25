@@ -161,9 +161,7 @@ defmodule Bonfire.Poll.Choices do
            })
            |> Ecto.Changeset.unique_constraint([:item_id, :scope_id],
              name: :bonfire_data_ranked_unique_per_scope
-           )
-           # |> Ecto.Changeset.apply_action(:insert)
-           |> debug("Ranked cs"),
+           ),
          {:ok, ins} <- repo().insert(cs) do
       # TODO: federate
       {:ok, ins}
@@ -185,7 +183,6 @@ defmodule Bonfire.Poll.Choices do
       e ->
         error(e)
     end
-    |> debug()
   end
 
   @doc """
@@ -216,8 +213,11 @@ defmodule Bonfire.Poll.Choices do
     question = repo().maybe_preload(question, :choices)
 
     case Enum.find(question.choices, fn c ->
-           e(c, :post_content, :name, nil) || e(c, :post_content, :summary, nil) ||
-             e(c, :post_content, :html_body, nil) == name
+           value =
+             e(c, :post_content, :name, nil) || e(c, :post_content, :summary, nil) ||
+               e(c, :post_content, :html_body, nil)
+
+           value == name
          end) do
       nil -> {:error, :not_found}
       choice -> {:ok, choice}
