@@ -172,6 +172,53 @@ defmodule Bonfire.Poll.VotesTest do
     end
   end
 
+  describe "notification routing" do
+    test "voting on your own poll does not notify yourself" do
+      author = fake_user!()
+
+      {:ok, question} =
+        fake_question_with_choices(
+          %{voting_dates: [DateTime.utc_now()]},
+          [%{name: "A"}],
+          current_user: author
+        )
+
+      [choice] = question.choices
+
+      assert {:ok, _} =
+               Votes.vote(author, question, [%{choice_id: choice.id, weight: 1}])
+
+      refute Bonfire.Social.FeedLoader.feed_contains?(:notifications, question,
+               current_user: author
+             )
+    end
+
+    test "voting on someone else's poll notifies the poll creator" do
+      author = fake_user!()
+      voter = fake_user!()
+
+      {:ok, question} =
+        fake_question_with_choices(
+          %{voting_dates: [DateTime.utc_now()]},
+          [%{name: "A"}],
+          current_user: author
+        )
+
+      [choice] = question.choices
+
+      assert {:ok, _} =
+               Votes.vote(voter, question, [%{choice_id: choice.id, weight: 1}])
+
+      assert Bonfire.Social.FeedLoader.feed_contains?(:notifications, question,
+               current_user: author
+             )
+
+      refute Bonfire.Social.FeedLoader.feed_contains?(:notifications, question,
+               current_user: voter
+             )
+    end
+  end
+
   describe "preview_vote_state_for_questions/2" do
     test "returns aggregate counts, vetoes, and only the current viewer's own votes" do
       author = fake_user!()
