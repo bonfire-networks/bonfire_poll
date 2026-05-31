@@ -156,6 +156,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       #   resolve(&list_polls/3)
       # end
       connection field :polls, node_type: :poll do
+        # Bound query cost by requested page size so an abusive `first:`/`last:` is rejected
+        # before resolution (on the public endpoint where complexity analysis is enabled).
+        complexity(fn args, child -> (args[:first] || args[:last] || 20) * child + 1 end)
         resolve(&list_polls/3)
       end
 
