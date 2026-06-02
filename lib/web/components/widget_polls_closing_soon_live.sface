@@ -5,7 +5,8 @@
       {#match %{polls: polls, counts: counts}}
         <Bonfire.UI.Common.WidgetBlockLive
           widget_title={@widget_title || l("Polls closing soon")}
-          class="bonfire-wrapper p-4"
+          title_class="pb-3 px-1 text-sm font-bold uppercase tracking-widest text-secondary"
+          class="w-full p-3 lg:p-4 relative overflow-hidden lg:rounded-box bg-gradient-to-br from-secondary/25 via-secondary/10 to-transparent"
           empty={polls == []}
           empty_icon="ph:list-checks-duotone"
           empty_message={l("No open polls yet. Why not start one and get people voting?")}
