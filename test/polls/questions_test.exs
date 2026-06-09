@@ -330,4 +330,87 @@ defmodule Bonfire.Poll.QuestionsTest do
       assert reloaded.weighting == 5
     end
   end
+
+  describe "create_poll LiveHandler — boundary default (regression)" do
+    # Drives the real handler (where the bug lived). The composer's boundary
+    # selector always supplies `to_boundaries`; when it's absent the handler must
+    # pass nil through so the boundary system applies the configured
+    # `:default_boundary_preset` (public). It used to force "mentions", which hid
+    # polls from public/local feeds. See poll_live_handler.ex.
+    import Ecto.Query
+
+    defp create_poll_socket(user) do
+      %Phoenix.LiveView.Socket{
+        assigns: %{
+          __changed__: %{},
+          __context__: %{current_user: user, current_user_id: user.id},
+          current_user: user,
+          current_user_id: user.id,
+          flash: %{}
+        }
+      }
+    end
+
+    defp poll_form_params(extra) do
+      Map.merge(
+        %{
+          "choices" => %{"0" => %{"name" => "Yes"}, "1" => %{"name" => "No"}},
+          "post_content" => %{"html_body" => "Ship it?"},
+          "poll_preset" => "quick",
+          "poll_duration_hours" => "24",
+          "poll_tuning_proposal_phase" => "false",
+          "poll_tuning_hide_results" => "false",
+          "poll_tuning_allow_vetoes" => "false"
+        },
+        extra
+      )
+    end
+
+    defp latest_question_for(user) do
+      Bonfire.Common.Repo.one(
+        from(q in Bonfire.Poll.Question,
+          join: a in Bonfire.Data.Social.Activity,
+          on: a.object_id == q.id,
+          where: a.subject_id == ^user.id,
+          order_by: [desc: q.id],
+          limit: 1
+        )
+      )
+    end
+
+    test "a poll submitted with no `to_boundaries` is readable by a stranger" do
+      author = Bonfire.Me.Fake.fake_user!()
+      stranger = Bonfire.Me.Fake.fake_user!()
+
+      # NB: params omit `to_boundaries` entirely (the regression trigger).
+      assert {:noreply, _socket} =
+               Bonfire.Poll.LiveHandler.handle_event(
+                 "create_poll",
+                 poll_form_params(%{}),
+                 create_poll_socket(author)
+               )
+
+      question = latest_question_for(author)
+      assert question
+
+      assert {:ok, _} = Bonfire.Poll.Questions.read(question.id, current_user: stranger)
+    end
+
+    test "an explicit `mentions` audience still hides the poll from a stranger (control)" do
+      author = Bonfire.Me.Fake.fake_user!()
+      stranger = Bonfire.Me.Fake.fake_user!()
+
+      assert {:noreply, _socket} =
+               Bonfire.Poll.LiveHandler.handle_event(
+                 "create_poll",
+                 poll_form_params(%{"to_boundaries" => ["mentions"]}),
+                 create_poll_socket(author)
+               )
+
+      question = latest_question_for(author)
+      assert question
+
+      refute match?({:ok, _}, Bonfire.Poll.Questions.read(question.id, current_user: stranger))
+    end
+  end
 end

@@ -10,26 +10,34 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
 
   alias Bonfire.Common.Cache
   alias Bonfire.Poll.Questions
+  alias Bonfire.Poll.Votes
   alias Bonfire.Poll.Web.Preview.QuestionLive
 
   prop limit, :integer, default: 3
   prop widget_title, :string, default: nil
 
   @doc """
-  Returns `%{polls: [...], counts: %{question_id => n}}` — the poll rows
-  plus a single grouped vote-count map keyed by question id. Two queries
-  total regardless of poll popularity, cached per user and limit for 1 hour.
+  Returns `%{polls: [...], counts: %{question_id => n}, voted_ids: MapSet}` —
+  the poll rows plus a grouped vote-count map keyed by question id, and the set
+  of polls the viewer has already weighed in on.
+
+  Polls + counts are cached per user and limit for 1 hour; `voted_ids` is read
+  fresh on each render so a viewer's "you've voted" state never lags their vote.
   """
   def load(current_user, limit) do
     cache_key = "widget_polls_closing_soon:#{cache_user_id(current_user)}:#{limit}"
     result = load_cached(current_user, limit, cache_key)
 
-    if mostly_ended?(result.polls) do
-      Cache.remove(cache_key)
-      load_cached(current_user, limit, cache_key)
-    else
-      result
-    end
+    result =
+      if mostly_ended?(result.polls) do
+        Cache.remove(cache_key)
+        load_cached(current_user, limit, cache_key)
+      else
+        result
+      end
+
+    voted_ids = Votes.voted_question_ids(current_user, Enum.map(result.polls, & &1.id))
+    Map.put(result, :voted_ids, voted_ids)
   end
 
   defp load_cached(current_user, limit, cache_key) do
@@ -65,12 +73,26 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
     end
   end
 
-  @doc "Localised, singular-aware vote-count label (delegates to QuestionLive)."
-  defdelegate pluralize_votes(n), to: QuestionLive
+  @doc """
+  The decision kind as `{label, icon}` — consent decisions read differently from
+  tally polls, so the widget names and ices them apart at a glance.
+  """
+  def kind(question) do
+    case voting_format(question) do
+      "weighted_multiple" -> {l("Consent"), "ph:handshake-duotone"}
+      _ -> {l("Poll"), "ph:chart-bar-duotone"}
+    end
+  end
 
-  @doc "Username of the user who created the poll, or nil."
-  def author_username(question),
-    do: e(question, :created, :creator, :character, :username, nil)
+  @doc "Participation label in the poll's own noun (reactions for consent, else votes)."
+  def count_label(question, counts),
+    do: QuestionLive.count_label(voting_format(question), total_votes(question, counts))
+
+  @doc "True when the viewer has already cast a vote on this poll."
+  def voted?(voted_ids, question), do: MapSet.member?(voted_ids, id(question))
+
+  defp voting_format(question),
+    do: e(question, :voting_format, nil) || Questions.default_voting_format()
 
   @doc "Total votes for a question, read from the pre-computed counts map."
   def total_votes(question, counts), do: Map.get(counts, question.id, 0)

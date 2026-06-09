@@ -40,6 +40,13 @@ defmodule Bonfire.Poll.LiveHandlerTest do
       assert LiveHandler.parse_votes(params) == [%{choice_id: "CHOICE_A", weight: 1}]
     end
 
+    test "weighted_multiple entry with a blank weight falls back to 1" do
+      # An empty hidden input is truthy in Elixir, so `|| 1` wouldn't catch it.
+      params = %{"votes" => %{"0" => %{"choice_id" => "CHOICE_A", "weight" => ""}}}
+
+      assert LiveHandler.parse_votes(params) == [%{choice_id: "CHOICE_A", weight: 1}]
+    end
+
     test "single-choice form shape (`vote` is a string)" do
       params = %{"vote" => "CHOICE_A"}
       assert LiveHandler.parse_votes(params) == [%{choice_id: "CHOICE_A", weight: 1}]

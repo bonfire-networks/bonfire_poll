@@ -5,8 +5,8 @@ defmodule Bonfire.Poll.LiveHandler do
   alias Bonfire.Poll.{Questions, Presets}
   alias Bonfire.Common.Types
 
-  defp path_for_question(id) when is_binary(id) do
-    case Questions.read(id, []) do
+  defp path_for_question(id, opts) when is_binary(id) do
+    case Questions.read(id, opts) do
       {:ok, q} -> path(q)
       _ -> nil
     end
@@ -14,7 +14,7 @@ defmodule Bonfire.Poll.LiveHandler do
     _ -> nil
   end
 
-  defp path_for_question(_), do: nil
+  defp path_for_question(_, _), do: nil
 
   defp preset_params_from_form(params) do
     tuning = Map.new(Presets.tuning_keys(), &{&1, parse_bool(params["poll_tuning_#{&1}"])})
@@ -41,11 +41,11 @@ defmodule Bonfire.Poll.LiveHandler do
 
   def negative_score_info do
     l("""
-    When someone asks a question on Bonfire, they can choose how much weight negative scores carry. Think of it like a volume knob for disagreement. 
+    When someone asks a question, they can choose how much weight negative scores carry. Think of it like a volume knob for disagreement.
 
     > For example, if one person disagrees with a proposal and gives it -2, while another person agrees with a score of 2, increasing the negative score weighting to x2 would give us `(-2 x 2) + 2 = -2` instead of a meaningless `-2 + 2 = 0`.
 
-    Why does this matter? It's about aiming for consent, instead of settling for everyone kinda-sorta agreeing. By giving more power to negative scores, we're saying "let's prioritize proposals that everyone can live with." Finding the sweet spot for each community or different types of decision might take a bit of experimentation, but that's part of the fun! 
+    Why does this matter? It's about aiming for consent, instead of settling for everyone kinda-sorta agreeing. By giving more power to negative scores, we're saying "let's prioritize proposals that everyone can live with." Finding the sweet spot for each community or different types of decision might take a bit of experimentation, but that's part of the fun!
     """)
   end
 
@@ -70,12 +70,7 @@ defmodule Bonfire.Poll.LiveHandler do
         fallback_return: {[], []}
       )
 
-    # `to_boundaries` arrives as a list from the form, scalar from fixtures.
-    boundary =
-      case e(params, "to_boundaries", "mentions") do
-        [head | _] -> head
-        single -> single
-      end
+    boundary = e(params, "to_boundaries", nil) |> List.wrap() |> List.first()
 
     with opts <-
            [
@@ -223,7 +218,7 @@ defmodule Bonfire.Poll.LiveHandler do
         # `push_navigate` to the same URL forces the LV to re-fetch the
         # question and pick up the newly-inserted choice.
         socket =
-          case path_for_question(question_id) do
+          case path_for_question(question_id, current_user: current_user(socket)) do
             nil -> socket
             path -> Phoenix.LiveView.push_navigate(socket, to: path)
           end
@@ -253,11 +248,14 @@ defmodule Bonfire.Poll.LiveHandler do
   end
 
   def handle_event("submit_vote", %{"question_id" => question} = params, socket) do
-    case Bonfire.Poll.Votes.vote(
-           current_user(socket),
-           question,
-           parse_votes(params)
-         ) do
+    voter = current_user(socket)
+
+    # Guard explicitly: `Votes.vote(nil, …)` would otherwise return the
+    # misleading "Voting is not open" rather than prompting a sign-in.
+    case voter && Bonfire.Poll.Votes.vote(voter, question, parse_votes(params)) do
+      nil ->
+        {:noreply, assign_error(socket, l("You need to sign in to vote."))}
+
       {:ok, _result} ->
         {:noreply, assign_flash(socket, :info, l("Thanks for participating!"))}
 
@@ -280,7 +278,8 @@ defmodule Bonfire.Poll.LiveHandler do
   """
   def parse_votes(%{"votes" => votes}) when is_map(votes) do
     for {_idx, %{"choice_id" => cid} = entry} <- votes do
-      %{choice_id: cid, weight: entry["weight"] || 1}
+      # Empty string is truthy in Elixir, so `|| 1` wouldn't catch a blank weight.
+      %{choice_id: cid, weight: if(entry["weight"] in [nil, ""], do: 1, else: entry["weight"])}
     end
   end
 

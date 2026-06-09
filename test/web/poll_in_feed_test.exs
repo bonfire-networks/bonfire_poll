@@ -141,7 +141,7 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     conn
     |> visit("/discussion/#{question.id}")
     |> wait_async()
-    |> assert_has_or_open_browser("[data-role=closed-header]", text: "Closed")
+    |> assert_has_or_open_browser("[data-role=poll-state][title='Closed']")
     |> refute_has("[data-role=submit-vote]")
   end
 
