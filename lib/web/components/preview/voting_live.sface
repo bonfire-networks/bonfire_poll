@@ -106,7 +106,7 @@
                   data-role="vote-score"
                   data-score={"#{i}"}
                   aria-current={i == @selected && "true"}
-                  title={"#{name} — #{description}"}
+                  title={"#{name}: #{description}"}
                 >
                   <Iconify.iconify
                     icon={icon}
@@ -141,7 +141,7 @@
                   data-label={name}
                   data-description={description}
                   data-color-class={score_color_class(i)}
-                  title={"#{name} — #{description}"}
+                  title={"#{name}: #{description}"}
                   class={[
                     "group relative inline-flex items-center justify-center cursor-pointer rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
                     "min-w-[36px] min-h-[36px] px-1": @compact,

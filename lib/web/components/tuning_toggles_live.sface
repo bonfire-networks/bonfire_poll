@@ -35,7 +35,7 @@
             </select>
             <Iconify.iconify
               icon="ph:arrow-right"
-              class="h-3.5 w-3.5 text-base-content/40 shrink-0"
+              class="size-4 text-base-content/40 shrink-0"
               aria-hidden="true"
             />
             <select

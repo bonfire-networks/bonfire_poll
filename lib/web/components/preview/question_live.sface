@@ -13,10 +13,12 @@
       winning_ids: winning_ids,
       voting_format: voting_format,
       total_votes: total_votes,
+      voter_count: voter_count,
       proposal_open: proposal_open,
       time_remaining_label: time_remaining_label,
       proposal_end_label: proposal_end_label,
-      question_without_choices: question_without_choices
+      question_without_choices: question_without_choices,
+      score_histogram_by_choice_id: score_histogram_by_choice_id
     }}
     <div
       data-id="activity_question"
@@ -106,9 +108,9 @@
              `proposal_dates` persists past the phase end, so the bare check
              would keep blocking voting after suggestions close. --}
         {#if proposal_open}
-          <div class="mt-3 rounded-md border border-base-content/10 overflow-hidden">
+          <div class="mt-3 rounded-md border border-base-content/10 overflow-hidden bg-gradient-to-b from-base-100 via-base-100 to-base-content/[0.04]">
             <div class="flex items-center gap-2 px-3 py-2 border-b border-base-content/8 text-sm text-base-content/70">
-              <Iconify.iconify icon="ph:lightbulb-duotone" class="h-3.5 w-3.5 shrink-0" />
+              <Iconify.iconify icon="ph:lightbulb-duotone" class="size-4 shrink-0" />
               <span class="font-medium text-base-content">{l("Proposal phase")}</span>
               {#case proposal_end_label}
                 {#match nil}
@@ -140,7 +142,7 @@
 
             {#if not is_nil(current_user_id(@__context__))}
               <form
-                class="flex items-center gap-2 px-3 py-2.5 border-t border-base-content/8 bg-base-content/[0.02]"
+                class="flex items-center gap-2 px-3 py-2.5 bg-base-content/[0.02]"
                 phx-submit="Bonfire.Poll:submit_proposal"
                 phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
                 data-role="propose-form"
@@ -169,204 +171,341 @@
           </div>
         {#elseif e(@object, :voting_dates, nil) != false}
           <form
-            class="mt-3 rounded-md border border-base-content/10 overflow-hidden"
+            id={"vote-form-#{id(@object)}"}
+            class="mt-3 rounded-md border border-base-content/10 overflow-hidden bg-gradient-to-b from-base-100 via-base-100 to-base-content/[0.04]"
             phx-submit="Bonfire.Poll:submit_vote"
             phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
             x-data="{ hasSelection: false }"
             x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
           >
-            {#if voting_format == "weighted_multiple" and vetoed_ids != []}
-              {!-- Soft entrance: empathetic, not celebratory. Calm fade-in. --}
-              <div
-                x-data="{ shown: window.matchMedia('(prefers-reduced-motion: reduce)').matches }"
-                x-init="$nextTick(() => shown = true)"
-                :class="shown ? 'opacity-100' : 'opacity-0'"
-                class="flex items-center gap-2 px-3 py-2 bg-error/[0.08] border-b border-error/20 text-error text-sm motion-safe:transition-opacity motion-safe:duration-400 motion-safe:ease-out"
-                role="status"
-                data-role="veto-banner"
-              >
-                <Iconify.iconify icon="ph:prohibit-bold" class="h-4 w-4 shrink-0" />
-                <span class="font-medium">{l("Vetoed, no consensus reached.")}</span>
-              </div>
-            {/if}
-
-            {#if closed}
-              <div
-                class="flex items-center gap-2 px-3 py-2 border-b border-base-content/8 text-sm text-base-content/70"
-                data-role="closed-header"
-              >
-                <Iconify.iconify icon="ph:lock-key" class="h-3.5 w-3.5 shrink-0" />
-                <span class="font-medium text-base-content">{l("Closed")}</span>
-                <span class="text-base-content/40" aria-hidden="true">·</span>
-                <span class="tabular-nums" data-role="vote-count">
-                  {pluralize_votes(total_votes)}
-                </span>
-              </div>
-            {/if}
-
-            <input type="hidden" name="question_id" value={id(@object)}>
-
-            <div class="divide-y divide-base-content/8">
-              {#for {choice, idx} <- Enum.with_index(choices)}
-                {#if results_toggleable}
-                  <div x-show="!showResults">
-                    <ChoiceLive
-                      question={question_without_choices}
-                      object={choice}
-                      index={idx}
-                      viewing_main_object={@viewing_main_object}
-                      showing_within={@showing_within}
-                      is_remote={@is_remote}
-                      hide_actions={@hide_actions}
-                      voting_format={voting_format}
-                      compact={@viewing_main_object != true}
-                      vote={not is_nil(current_user_id(@__context__))}
-                      vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
-                      total_votes={total_votes}
-                      voted_on={false}
-                      user_score={nil}
-                      has_voted_overall={false}
-                      results_visible={false}
-                      is_winner={false}
-                      is_vetoed={false}
-                      closed={closed}
-                    />
-                  </div>
-                  <div x-show="showResults" x-cloak>
-                    <ChoiceLive
-                      question={question_without_choices}
-                      object={choice}
-                      index={idx}
-                      viewing_main_object={@viewing_main_object}
-                      showing_within={@showing_within}
-                      is_remote={@is_remote}
-                      hide_actions={@hide_actions}
-                      voting_format={voting_format}
-                      compact={@viewing_main_object != true}
-                      vote={false}
-                      vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
-                      total_votes={total_votes}
-                      voted_on={false}
-                      user_score={nil}
-                      has_voted_overall={false}
-                      results_visible
-                      is_winner={false}
-                      is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
-                      closed={closed}
-                    />
-                  </div>
-                {#else}
-                  <ChoiceLive
-                    question={question_without_choices}
-                    object={choice}
-                    index={idx}
-                    viewing_main_object={@viewing_main_object}
-                    showing_within={@showing_within}
-                    is_remote={@is_remote}
-                    hide_actions={@hide_actions}
-                    voting_format={voting_format}
-                    compact={@viewing_main_object != true}
-                    vote={not closed and not is_nil(current_user_id(@__context__))}
-                    vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
-                    total_votes={total_votes}
-                    voted_on={Map.has_key?(my_votes, id(choice))}
-                    user_score={Map.get(my_votes, id(choice))}
-                    has_voted_overall={has_voted}
-                    results_visible={results_visible}
-                    is_winner={closed and id(choice) in winning_ids and total_votes > 0}
-                    is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
-                    closed={closed}
-                  />
-                {/if}
-              {/for}
-            </div>
-
-            {#if not closed}
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 bg-base-content/[0.02] border-t border-base-content/8">
-                {#if is_nil(current_user_id(@__context__))}
-                  <a
-                    href="/login"
-                    class="btn btn-sm btn-ghost border border-base-content/20"
-                    data-role="sign-in-to-vote"
-                  >
-                    {l("Sign in to vote")}
-                  </a>
-                {#elseif has_voted}
-                  {!-- Pop-in on the first render after submission. --}
-                  <span
-                    x-data="{ s: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0.85, o: 0 }"
-                    x-init="$nextTick(() => { s = 1; o = 1; })"
-                    :style="`transform: scale(${s}); opacity: ${o}`"
-                    class="inline-flex items-center gap-1.5 text-sm text-primary font-medium motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100"
-                    data-role="voted-indicator"
-                  >
-                    <Iconify.iconify icon="ph:check-circle-fill" class="h-4 w-4" />
-                    {l("Voted")}
-                  </span>
-                {#else}
-                  <button
-                    type="submit"
-                    id={"submit-vote-#{id(@object)}"}
-                    data-role="submit-vote"
-                    class="btn btn-primary btn-sm"
-                    x-bind:disabled={if voting_format == "weighted_multiple",
-                      do: "false",
-                      else: "!hasSelection"}
-                  >
-                    {if voting_format == "weighted_multiple",
-                      do: l("Submit votes"),
-                      else: l("Vote")}
-                  </button>
-                {/if}
-
-                {#if not has_voted}
-                  {#if locked}
-                    <span
-                      class="text-sm text-base-content/40 cursor-not-allowed"
-                      title={l("Results hidden until poll closes.")}
-                      data-role="results-toggle-locked"
+            {#case decision_state(voting_format, closed, total_votes, vetoed_ids, winning_ids)}
+              {#match state}
+                {!-- Status band: one decisive line naming the *kind* of decision,
+                     its *state* (open / decided / no consensus / closed), and the
+                     headline meta. This is what makes open-vs-closed unmistakable
+                     and tells the reader what process they're looking at. --}
+                {#case process_kind(voting_format)}
+                  {#match kind_label}
+                    <div
+                      data-role="poll-status-band"
+                      class={[
+                        "flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 border-b text-sm",
+                        "border-base-content/8": state in [:open, :closed, :closed_empty, :no_agreement],
+                        "bg-success/[0.06] border-success/20": state == :decided,
+                        "bg-error/[0.06] border-error/20": state == :no_consensus
+                      ]}
                     >
-                      {l("See results")}
-                    </span>
-                  {#else}
-                    <button
-                      type="button"
-                      x-on:click="showResults = !showResults"
-                      class="text-sm link link-hover text-base-content/70 hover:text-base-content"
-                      data-role="results-toggle"
-                    >
-                      <span x-show="!showResults">{l("See results")}</span>
-                      <span x-show="showResults" x-cloak>{l("Hide results")}</span>
-                    </button>
-                  {/if}
-                {/if}
-
-                {!-- Meta cluster: counts + time. No mid-dots — `gap-x-3` spaces them
-                     plenty and removes the wall-of-bullets look. --}
-                <div class="inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-sm">
-                  {#if not locked}
-                    <span class="text-base-content/60 tabular-nums" data-role="vote-count">
-                      {pluralize_votes(total_votes)}
-                    </span>
-                  {/if}
-
-                  {#case time_remaining_label}
-                    {#match nil}
-                    {#match label}
-                      <span class="text-base-content/60 tabular-nums" data-role="time-remaining">
-                        {label}
+                      {!-- One wrapper; only the inner icon/dot varies by state,
+                           the tone comes from state_color_class/1. --}
+                      <span
+                        class={["inline-flex items-center", state_color_class(state)]}
+                        title={state_label(state, voting_format)}
+                        aria-label={state_label(state, voting_format)}
+                        data-role="poll-state"
+                      >
+                        {#case state}
+                          {#match :open}
+                            <span class="relative flex h-2 w-2" aria-hidden="true">
+                              <span class="motion-safe:animate-ping absolute inline-flex h-full w-full rounded-full bg-primary/60" />
+                              <span class="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                            </span>
+                          {#match :decided}
+                            <Iconify.iconify icon="ph:seal-check-duotone" class="h-4 w-4" />
+                          {#match :no_consensus}
+                            <Iconify.iconify icon="ph:prohibit" class="h-4 w-4" />
+                          {#match :no_agreement}
+                            <Iconify.iconify icon="ph:scales-duotone" class="h-4 w-4" />
+                          {#match _}
+                            <Iconify.iconify icon="ph:lock-key" class="size-4" />
+                        {/case}
                       </span>
-                  {/case}
+                      <span class="font-semibold text-base-content">{kind_label}</span>
+
+                      <div class="ml-auto inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-base-content/70 tabular-nums">
+                        <span class={["font-medium", state_color_class(state)]} data-role="poll-state-label">
+                          {state_label(state, voting_format)}
+                        </span>
+                        {#if not locked}
+                          <span data-role="vote-count">{count_label(voting_format, total_votes)}</span>
+                        {/if}
+                        {#if state == :open}
+                          {#case time_remaining_label}
+                            {#match nil}
+                            {#match tlabel}
+                              <span data-role="time-remaining">{tlabel}</span>
+                          {/case}
+                        {/if}
+                        {#if @is_remote}
+                          <span class="inline-flex items-center gap-1">
+                            <Iconify.iconify icon="ph:globe-simple" class="h-3 w-3" />
+                            {l("Federated")}
+                          </span>
+                        {/if}
+                      </div>
+                    </div>
+                {/case}
+
+                {!-- A standing objection while voting is still open reads as
+                     caution (warning), not finality (error): the group can still
+                     resolve it before close. --}
+                {#if state == :open and voting_format == "weighted_multiple" and vetoed_ids != []}
+                  <div
+                    class="flex items-center gap-2 px-3 py-1.5 border-b border-warning/20 bg-warning/[0.06] text-warning text-xs"
+                    role="status"
+                    data-role="open-block-note"
+                  >
+                    <Iconify.iconify icon="ph:hand-palm-duotone" class="size-4 shrink-0" />
+                    <span class="font-medium">{l("An objection is on the table. This option can't carry until it's resolved.")}</span>
+                  </div>
+                {/if}
+
+                {!-- Thread-only: the process rules, made legible on demand. --}
+                {#if @viewing_main_object and voting_format == "weighted_multiple"}
+                  <details class="group/how border-b border-base-content/8" data-role="how-decided" x-on:click.stop>
+                    <summary class="flex items-center gap-2 px-3 py-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm text-base-content/70 hover:text-base-content select-none">
+                      <Iconify.iconify icon="ph:info-duotone" class="h-4 w-4 shrink-0 text-base-content/60" />
+                      <span class="font-medium">{l("How this is decided")}</span>
+                      <Iconify.iconify
+                        icon="ph:caret-down"
+                        class="size-4 ml-auto text-base-content/50 transition-transform group-open/how:rotate-180 motion-reduce:transition-none"
+                      />
+                    </summary>
+                    <div class="px-3 pb-3 text-sm text-base-content/70 leading-relaxed max-w-prose">
+                      {l(
+                        "Everyone reacts to each option, not just their favourite. An option is agreed when it has broad agreement and no blocks. A single block stops an option until the group resolves the objection."
+                      )}
+                    </div>
+                  </details>
+                {/if}
+
+                <input type="hidden" name="question_id" value={id(@object)}>
+
+                <div
+                  class={[
+                    "flex flex-col",
+                    "gap-1.5 p-1.5": @viewing_main_object,
+                    "gap-1 p-1": !@viewing_main_object
+                  ]}
+                  data-role="choices"
+                >
+                  {#for {choice, idx} <- Enum.with_index(choices)}
+                    {#if results_toggleable}
+                      <div x-show="!showResults">
+                        <ChoiceLive
+                          question={question_without_choices}
+                          object={choice}
+                          index={idx}
+                          viewing_main_object={@viewing_main_object}
+                          showing_within={@showing_within}
+                          is_remote={@is_remote}
+                          hide_actions={@hide_actions}
+                          voting_format={voting_format}
+                          compact={@viewing_main_object != true}
+                          vote={not is_nil(current_user_id(@__context__))}
+                          vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
+                          total_votes={total_votes}
+                          voted_on={false}
+                          user_score={nil}
+                          results_visible={false}
+                          is_winner={false}
+                          is_vetoed={false}
+                        />
+                      </div>
+                      <div x-show="showResults" x-cloak>
+                        <ChoiceLive
+                          question={question_without_choices}
+                          object={choice}
+                          index={idx}
+                          viewing_main_object={@viewing_main_object}
+                          showing_within={@showing_within}
+                          is_remote={@is_remote}
+                          hide_actions={@hide_actions}
+                          voting_format={voting_format}
+                          compact={@viewing_main_object != true}
+                          vote={false}
+                          vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
+                          total_votes={total_votes}
+                          voted_on={false}
+                          user_score={nil}
+                          results_visible
+                          is_winner={false}
+                          is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
+                          score_histogram={Map.get(score_histogram_by_choice_id, id(choice), %{})}
+                          voters_count={voter_count}
+                        />
+                      </div>
+                    {#else}
+                      <ChoiceLive
+                        question={question_without_choices}
+                        object={choice}
+                        index={idx}
+                        viewing_main_object={@viewing_main_object}
+                        showing_within={@showing_within}
+                        is_remote={@is_remote}
+                        hide_actions={@hide_actions}
+                        voting_format={voting_format}
+                        compact={@viewing_main_object != true}
+                        vote={not closed and not is_nil(current_user_id(@__context__))}
+                        vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
+                        total_votes={total_votes}
+                        voted_on={Map.has_key?(my_votes, id(choice))}
+                        user_score={Map.get(my_votes, id(choice))}
+                        results_visible={results_visible}
+                        is_winner={closed and total_votes > 0 and id(choice) in winning_ids and
+                          (voting_format != "weighted_multiple" or state == :decided)}
+                        is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
+                        score_histogram={if voting_format == "weighted_multiple",
+                          do: Map.get(score_histogram_by_choice_id, id(choice), %{}),
+                          else: %{}}
+                        voters_count={voter_count}
+                      />
+                    {/if}
+                  {/for}
                 </div>
 
-                {#if @is_remote}
-                  <span class="ml-auto inline-flex items-center gap-1 text-xs text-base-content/55">
-                    <Iconify.iconify icon="ph:globe-simple" class="h-3 w-3" />
-                    {l("Federated")}
-                  </span>
+                {!-- Thread-only outcome panel: states *what was decided and why*,
+                 instead of leaving the reader to infer it from bars. --}
+                {#if @viewing_main_object and closed}
+                  {#case state}
+                    {#match :decided}
+                      <div
+                        class="flex items-start gap-2 px-3 py-2.5 border-t border-success/20 bg-success/[0.06] text-sm"
+                        data-role="outcome"
+                      >
+                        <Iconify.iconify icon="ph:seal-check-duotone" class="h-4 w-4 mt-0.5 shrink-0 text-success" />
+                        <div class="min-w-0">
+                          <span class="font-semibold text-success">{l("Agreed")}</span>
+                          {#case Enum.join(choice_names(choices, winning_ids), ", ")}
+                            {#match ""}
+                            {#match names}
+                              <span class="text-base-content">: {names}</span>
+                          {/case}
+                          <p class="text-base-content/70 mt-0.5">{l("Broad agreement, no blocks.")}</p>
+                        </div>
+                      </div>
+                    {#match :no_consensus}
+                      <div
+                        class="flex items-start gap-2 px-3 py-2.5 border-t border-error/20 bg-error/[0.06] text-sm"
+                        data-role="outcome"
+                      >
+                        <Iconify.iconify icon="ph:prohibit" class="h-4 w-4 mt-0.5 shrink-0 text-error" />
+                        <div class="min-w-0">
+                          <span class="font-semibold text-error">{l("No consensus reached")}</span>
+                          {#case Enum.join(choice_names(choices, vetoed_ids), ", ")}
+                            {#match ""}
+                            {#match names}
+                              <span class="text-base-content">: {names}</span>
+                          {/case}
+                          <p class="text-base-content/70 mt-0.5">{l("An objection blocked agreement. The group can keep talking and try again.")}</p>
+                        </div>
+                      </div>
+                    {#match :closed_empty}
+                      <div
+                        class="flex items-center gap-2 px-3 py-2.5 border-t border-base-content/8 text-sm text-base-content/60"
+                        data-role="outcome"
+                      >
+                        <Iconify.iconify icon="ph:lock-key" class="h-4 w-4 shrink-0" />
+                        <span>{l("Closed with no votes.")}</span>
+                      </div>
+                    {#match :no_agreement}
+                      <div
+                        class="flex items-start gap-2 px-3 py-2.5 border-t border-base-content/8 text-sm"
+                        data-role="outcome"
+                      >
+                        <Iconify.iconify icon="ph:scales-duotone" class="h-4 w-4 mt-0.5 shrink-0 text-base-content/70" />
+                        <div class="min-w-0">
+                          <span class="font-semibold text-base-content">{l("No agreement reached")}</span>
+                          <p class="text-base-content/70 mt-0.5">{l(
+                              "People reacted, but no option had clear agreement. Nothing was blocked — the group can refine an option and try again."
+                            )}</p>
+                        </div>
+                      </div>
+                    {#match _}
+                      {!-- Tally winner: a single slim caption, not a filled panel.
+                       The accented leading bar already carries the win; this
+                       just names it and its share. Plural-aware for ties. --}
+                      {#case Enum.join(choice_names(choices, winning_ids), ", ")}
+                        {#match ""}
+                        {#match names}
+                          <div
+                            class="flex items-center gap-1.5 px-3 py-2 border-t border-base-content/8 text-sm"
+                            data-role="outcome"
+                          >
+                            <Iconify.iconify icon="ph:sparkle-duotone" class="h-4 w-4 shrink-0 text-primary/80" />
+                            <span class="text-base-content/70">{if length(winning_ids) > 1, do: l("Tied"), else: l("Top pick")}:</span>
+                            <span class="font-semibold text-base-content truncate">{names}</span>
+                            {#case winning_percent(voting_format, counts_by_choice_id, winning_ids, total_votes, voter_count)}
+                              {#match 0}
+                              {#match pct}
+                                <span class="ml-auto shrink-0 tabular-nums text-base-content/70">{pct}%</span>
+                            {/case}
+                          </div>
+                      {/case}
+                  {/case}
                 {/if}
-              </div>
-            {/if}
+
+                {#if not closed}
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 bg-base-content/[0.02]">
+                    {#if is_nil(current_user_id(@__context__))}
+                      <a
+                        href="/login"
+                        class="btn btn-sm btn-ghost border border-base-content/20"
+                        data-role="sign-in-to-vote"
+                      >
+                        {l("Sign in to vote")}
+                      </a>
+                    {#elseif has_voted}
+                      {!-- Pop-in on the first render after submission. --}
+                      <span
+                        x-data="{ s: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0.85, o: 0 }"
+                        x-init="$nextTick(() => { s = 1; o = 1; })"
+                        :style="`transform: scale(${s}); opacity: ${o}`"
+                        class="inline-flex items-center gap-1.5 text-sm text-primary font-medium motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100"
+                        data-role="voted-indicator"
+                      >
+                        <Iconify.iconify icon="ph:check-circle-fill" class="h-4 w-4" />
+                        {l("Voted")}
+                      </span>
+                    {#else}
+                      <button
+                        type="submit"
+                        id={"submit-vote-#{id(@object)}"}
+                        data-role="submit-vote"
+                        class="btn btn-primary btn-sm"
+                        x-bind:disabled={if voting_format == "weighted_multiple",
+                          do: "false",
+                          else: "!hasSelection"}
+                      >
+                        {if voting_format == "weighted_multiple",
+                          do: l("Submit votes"),
+                          else: l("Vote")}
+                      </button>
+                    {/if}
+
+                    {#if not has_voted}
+                      {#if locked}
+                        <span
+                          class="text-sm text-base-content/40 cursor-not-allowed"
+                          title={l("Results hidden until poll closes.")}
+                          data-role="results-toggle-locked"
+                        >
+                          {l("See results")}
+                        </span>
+                      {#else}
+                        <button
+                          type="button"
+                          x-on:click="showResults = !showResults"
+                          class="text-sm link link-hover text-base-content/70 hover:text-base-content"
+                          data-role="results-toggle"
+                        >
+                          <span x-show="!showResults">{l("See results")}</span>
+                          <span x-show="showResults" x-cloak>{l("Hide results")}</span>
+                        </button>
+                      {/if}
+                    {/if}
+                  </div>
+                {/if}
+            {/case}
           </form>
         {/if}
       {/if}

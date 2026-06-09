@@ -13,111 +13,272 @@
       x-data="{ expanded: false, content_open: false }"
     >
       {#if @results_visible}
-        {#case percent(@vote_count, @total_votes)}
-          {#match pct}
-            <div class="relative overflow-hidden">
-              {!-- Bar starts at 0 and sweeps to its value on mount.
-                   For reduced-motion users we start at the target so the bar
-                   never visibly jumps. --}
-              <div
-                aria-hidden="true"
-                x-data={"{ w: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? #{pct} : 0 }"}
-                x-init={"$nextTick(() => w = #{pct})"}
-                :style="`width: ${w}%`"
-                class={[
-                  "absolute inset-y-0 left-0",
-                  "motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
-                  "bg-primary/15": @is_winner,
-                  "bg-base-content/[0.06]": !@is_winner and !@is_vetoed,
-                  "bg-error/[0.12]": @is_vetoed
-                ]}
-              />
-
-              <div class="relative flex items-center gap-3 px-3 py-2.5">
-                <div class="flex items-start gap-2 min-w-0 flex-1">
-                  {#if @is_vetoed}
-                    <Iconify.iconify
-                      icon="ph:prohibit-bold"
-                      class="h-4 w-4 mt-0.5 text-error shrink-0"
-                      aria-label={l("Vetoed")}
-                    />
-                  {#elseif @is_winner}
-                    {!-- Trophy gently drops in when the closed result renders. --}
-                    <span
-                      x-data="{ y: -6, o: 0 }"
-                      x-init="$nextTick(() => { y = 0; o = 1; })"
-                      :style="`transform: translateY(${y}px); opacity: ${o}`"
-                      class="mt-0.5 shrink-0 motion-safe:transition-all motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100 motion-reduce:!translate-y-0"
-                      aria-hidden="true"
-                    >
-                      <Iconify.iconify
-                        icon="ph:trophy-duotone"
-                        class="h-4 w-4 text-primary"
-                        aria-label={l("Winning option")}
-                      />
-                    </span>
-                  {/if}
-
-                  <div class="min-w-0 flex-1">
-                    <ChoiceContentLive
-                      question={@question}
-                      object={@object}
-                      viewing_main_object={@viewing_main_object}
-                      showing_within={@showing_within}
-                      is_remote={@is_remote}
-                      hide_actions={@hide_actions}
-                      voting_format={@voting_format}
-                      vote={@vote}
-                      compact={@compact}
-                      is_winner={@is_winner}
-                    />
-
-                    {#if voted_on and @voting_format == "weighted_multiple"}
-                      {#case @user_score}
-                        {#match nil}
-                        {#match score}
-                          {#case score_label(score)}
-                            {#match nil}
-                            {#match {_v, name, icon, _desc}}
-                              <div
-                                class="mt-1 inline-flex items-center gap-1.5 text-xs"
-                                data-role="your-score"
-                                data-score={"#{score}"}
-                              >
-                                <span class="text-base-content/60">{l("Your vote:")}</span>
-                                <Iconify.iconify icon={icon} class={["h-4 w-4", score_color_class(score)]} />
-                                <span class={["font-medium", score_color_class(score)]}>{name}</span>
-                              </div>
-                          {/case}
-                      {/case}
-                    {#elseif voted_on}
-                      <div class="mt-0.5 inline-flex items-center gap-1 text-xs text-primary" data-role="your-vote">
-                        <Iconify.iconify icon="ph:check-circle-fill" class="h-3.5 w-3.5" />
-                        <span>{l("Your vote")}</span>
-                      </div>
-                    {/if}
-                  </div>
-                </div>
-
-                <div
-                  class={[
-                    "shrink-0 text-sm tabular-nums whitespace-nowrap",
-                    "font-semibold text-base-content": @is_winner,
-                    "text-base-content/70": !@is_winner
-                  ]}
-                  data-role="choice-stats"
+        {#if @voting_format == "weighted_multiple"}
+          {!-- Consent results carry no share-of-total bar: a percentage of
+               reactions is meaningless when everyone reacts to every option.
+               The option reads through its outcome (carried / blocked), the
+               viewer's own reaction, and how many people weighed in. --}
+          <div
+            data-role="consent-result"
+            class={[
+              "relative rounded-lg px-3 py-2.5 motion-safe:transition-colors",
+              "bg-error/[0.07] ring-1 ring-inset ring-error/25": @is_vetoed,
+              "bg-success/[0.08]": @is_winner and not @is_vetoed,
+              "bg-base-content/[0.03]": not @is_vetoed and not @is_winner
+            ]}
+          >
+            {!-- Name + outcome state lead the row; the reaction detail sits
+                 below, so it reads name-first instead of a floating chip on top. --}
+            <div class="flex items-start gap-2">
+              {#if @is_vetoed}
+                <Iconify.iconify
+                  icon="ph:prohibit-bold"
+                  class="h-4 w-4 mt-0.5 text-error shrink-0"
+                  aria-label={l("Blocked")}
+                />
+              {#elseif @is_winner}
+                {!-- Calm drop-in when the agreed option resolves. --}
+                <span
+                  x-data="{ y: -6, o: 0 }"
+                  x-init="$nextTick(() => { y = 0; o = 1; })"
+                  :style="`transform: translateY(${y}px); opacity: ${o}`"
+                  class="mt-0.5 shrink-0 motion-safe:transition-all motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100 motion-reduce:!translate-y-0"
+                  aria-hidden="true"
                 >
-                  <span>{pct}%</span>
-                  <span class="text-base-content/50 ml-1">({@vote_count})</span>
-                </div>
+                  <Iconify.iconify icon="ph:seal-check-duotone" class="h-4 w-4 text-success" />
+                </span>
+              {/if}
+
+              <div class="min-w-0 flex-1">
+                <ChoiceContentLive
+                  question={@question}
+                  object={@object}
+                  viewing_main_object={@viewing_main_object}
+                  showing_within={@showing_within}
+                  is_remote={@is_remote}
+                  hide_actions={@hide_actions}
+                  voting_format={@voting_format}
+                  vote={@vote}
+                  compact={@compact}
+                  is_winner={@is_winner and not @is_vetoed}
+                />
+
+                {#if show_your_reaction_line?(@viewing_main_object, voted_on, @score_histogram)}
+                  {#case score_label(@user_score)}
+                    {#match nil}
+                    {#match {_v, name, icon, _desc}}
+                      <div
+                        class="mt-1 inline-flex items-center gap-1.5 text-xs"
+                        data-role="your-score"
+                        data-score={"#{@user_score}"}
+                      >
+                        <span class="text-base-content/60">{l("Your reaction:")}</span>
+                        <Iconify.iconify icon={icon} class={["h-4 w-4", score_color_class(@user_score)]} />
+                        <span class={["font-medium", score_color_class(@user_score)]}>{name}</span>
+                      </div>
+                  {/case}
+                {/if}
+              </div>
+
+              <div class="shrink-0 flex flex-col items-end gap-0.5 text-right">
+                {#if @is_vetoed}
+                  <span
+                    class="inline-flex items-center gap-1 text-xs font-semibold text-error"
+                    data-role="choice-blocked"
+                  >
+                    <Iconify.iconify icon="ph:hand-palm-bold" class="size-4" />
+                    {l("Blocked")}
+                  </span>
+                {#elseif @is_winner}
+                  <span
+                    class="inline-flex items-center gap-1 text-xs font-semibold text-success"
+                    data-role="choice-carried"
+                  >
+                    <Iconify.iconify icon="ph:check-bold" class="size-4" />
+                    {l("Agreed")}
+                  </span>
+                {/if}
+                {!-- The distribution carries the counts in thread; only show a
+                     standalone total when there's no distribution (the feed). --}
+                {#if not (@viewing_main_object and has_histogram?(@score_histogram))}
+                  <span class="text-xs text-base-content/70 tabular-nums" data-role="choice-participation">
+                    {reactions_label(@vote_count)}
+                  </span>
+                {/if}
               </div>
             </div>
-        {/case}
+
+            {#if @viewing_main_object and has_histogram?(@score_histogram)}
+              <div class="mt-2.5" data-role="consent-distribution">
+                {#case consent_distribution(@score_histogram)}
+                  {#match g}
+                    {#if show_distribution_bar?(g)}
+                      {!-- Agree↔disagree balance: warning grows leftward from a
+                           neutral centre, success rightward; both sides scaled to the
+                           larger side so the ratio reads honestly. Labelled poles +
+                           squared track keep it reading as a chart, not a skeleton. --}
+                      <div dir="ltr">
+                        <div class="flex items-center justify-between text-xs uppercase tracking-wide text-base-content/70 mb-1">
+                          <span>{l("Disagree")}</span>
+                          <span>{l("Agree")}</span>
+                        </div>
+                        <div
+                          class="relative flex h-6 rounded bg-base-content/[0.05] ring-1 ring-inset ring-base-content/10 overflow-hidden"
+                          role="img"
+                          aria-label={consent_distribution_label(g)}
+                        >
+                          <div class="w-1/2 flex justify-end">
+                            <div
+                              style={"width: #{g.neg_pct}%"}
+                              class={[
+                                "h-full bg-warning/70 motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                "ring-2 ring-inset ring-base-content": viewer_on_side?(@voted_on, @user_score, :neg)
+                              ]}
+                            />
+                          </div>
+                          <div class="w-1/2 flex justify-start">
+                            <div
+                              style={"width: #{g.pos_pct}%"}
+                              class={[
+                                "h-full bg-success/70 motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                "ring-2 ring-inset ring-base-content": viewer_on_side?(@voted_on, @user_score, :pos)
+                              ]}
+                            />
+                          </div>
+                          <div
+                            class="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-base-content/25"
+                            aria-hidden="true"
+                          />
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-base-content/70 mt-1 tabular-nums">
+                          <span>{g.neg_count}</span>
+                          <div class="inline-flex items-center gap-2">
+                            {#if g.neutral_count > 0}
+                              <span class="text-base-content/70">{neutral_label(g.neutral_count)}</span>
+                            {/if}
+                            {#if g.block_count > 0}
+                              <span class="inline-flex items-center gap-1 text-error font-medium">
+                                <Iconify.iconify icon="ph:prohibit-bold" class="h-3 w-3" />{block_label(g.block_count)}
+                              </span>
+                            {/if}
+                          </div>
+                          <span>{g.pos_count}</span>
+                        </div>
+                      </div>
+                    {#else}
+                      {!-- Low count or no agree/disagree signal: show the actual
+                       reactions as chips (Disagree→Agree, the viewer's own
+                       marked). Honest at N=1, never reads as a loading bar. --}
+                      <div class="flex flex-wrap items-center gap-1.5" data-role="reaction-chips">
+                        {#for {value, name, icon, color, count} <- reaction_chips(@score_histogram)}
+                          <span
+                            class={[
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs bg-base-content/[0.05]",
+                              "ring-1 ring-inset ring-primary/40": viewer_in_bucket?(@voted_on, @user_score, value)
+                            ]}
+                            data-role="reaction-chip"
+                            data-bucket={"#{value}"}
+                          >
+                            <Iconify.iconify icon={icon} class={["h-4 w-4", color]} aria-hidden="true" />
+                            <span class="text-base-content/80">{name}</span>
+                            <span class="tabular-nums text-base-content/70">{count}</span>
+                            {#if viewer_in_bucket?(@voted_on, @user_score, value)}
+                              <span class="text-primary/80 font-medium">· {l("you")}</span>
+                            {/if}
+                          </span>
+                        {/for}
+                      </div>
+                    {/if}
+                {/case}
+              </div>
+            {/if}
+          </div>
+        {#else}
+          {!-- Tally poll: a real, honest share bar. For "single" the denominator
+               is total votes; for "multiple" it's distinct voters, so each bar
+               reads "share of voters who picked this" and bars need not sum to
+               100% (correct for multi-select). --}
+          {#case tally_percent(@voting_format, @vote_count, @total_votes, @voters_count)}
+            {#match pct}
+              <div class={[
+                "relative rounded-lg overflow-hidden",
+                "ring-1 ring-inset ring-primary/25": @is_winner
+              ]}>
+                {!-- Bar sweeps from 0 to its value on mount. Reduced-motion
+                     users start at the target so it never visibly jumps. --}
+                <div
+                  aria-hidden="true"
+                  x-data={"{ w: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? #{pct} : 0 }"}
+                  x-init={"$nextTick(() => w = #{pct})"}
+                  :style="`width: ${w}%`"
+                  class={[
+                    "absolute inset-y-0 left-0 rounded-lg",
+                    "motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                    "bg-primary/[0.12]": @is_winner,
+                    "bg-base-content/[0.06]": !@is_winner
+                  ]}
+                />
+
+                <div class="relative flex items-center gap-3 px-3 py-2.5">
+                  <div class="flex items-start gap-2 min-w-0 flex-1">
+                    {#if @is_winner}
+                      <span
+                        x-data="{ y: -6, o: 0 }"
+                        x-init="$nextTick(() => { y = 0; o = 1; })"
+                        :style="`transform: translateY(${y}px); opacity: ${o}`"
+                        class="mt-0.5 shrink-0 motion-safe:transition-all motion-safe:duration-500 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100 motion-reduce:!translate-y-0"
+                        aria-hidden="true"
+                      >
+                        <Iconify.iconify icon="ph:sparkle-duotone" class="h-4 w-4 text-primary" />
+                      </span>
+                    {/if}
+
+                    <div class="min-w-0 flex-1">
+                      <ChoiceContentLive
+                        question={@question}
+                        object={@object}
+                        viewing_main_object={@viewing_main_object}
+                        showing_within={@showing_within}
+                        is_remote={@is_remote}
+                        hide_actions={@hide_actions}
+                        voting_format={@voting_format}
+                        vote={@vote}
+                        compact={@compact}
+                        is_winner={@is_winner}
+                      />
+
+                      {#if voted_on}
+                        <div
+                          class="mt-0.5 inline-flex items-center gap-1 text-xs text-base-content/55"
+                          data-role="your-vote"
+                        >
+                          <Iconify.iconify icon="ph:check-circle-fill" class="h-3 w-3 text-primary/70" />
+                          <span>{l("Your vote")}</span>
+                        </div>
+                      {/if}
+                    </div>
+                  </div>
+
+                  <div
+                    class={[
+                      "shrink-0 text-sm tabular-nums whitespace-nowrap",
+                      "font-semibold text-base-content": @is_winner,
+                      "text-base-content/70": !@is_winner
+                    ]}
+                    data-role="choice-stats"
+                  >
+                    <span>{pct}%</span>
+                    <span class="text-base-content/50 ml-1">({@vote_count})</span>
+                  </div>
+                </div>
+              </div>
+          {/case}
+        {/if}
       {#elseif @vote and not voted_on and @voting_format == "weighted_multiple"}
         {!-- Inline layout: choice text on the left, face strip on the right.
              Stacks below on narrow viewports (sm:). Halves the per-choice
              vertical height versus the previous two-band layout. --}
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2">
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 rounded-lg px-3 py-2 motion-safe:transition-colors hover:bg-base-content/[0.03]">
           <div class="flex-1 min-w-0">
             <ChoiceContentLive
               question={@question}
@@ -143,29 +304,31 @@
           />
         </div>
       {#elseif @vote and not voted_on}
-        <VotingLive
-          voting_format={@voting_format}
-          question={@question}
-          choice={@object}
-          index={@index}
-          selected={false}
-          compact={@compact}
-        >
-          <ChoiceContentLive
-            question={@question}
-            object={@object}
-            viewing_main_object={@viewing_main_object}
-            showing_within={@showing_within}
-            is_remote={@is_remote}
-            hide_actions={@hide_actions}
+        <div class="rounded-lg overflow-hidden motion-safe:transition-colors">
+          <VotingLive
             voting_format={@voting_format}
-            vote={@vote}
+            question={@question}
+            choice={@object}
+            index={@index}
+            selected={false}
             compact={@compact}
-            is_winner={false}
-          />
-        </VotingLive>
+          >
+            <ChoiceContentLive
+              question={@question}
+              object={@object}
+              viewing_main_object={@viewing_main_object}
+              showing_within={@showing_within}
+              is_remote={@is_remote}
+              hide_actions={@hide_actions}
+              voting_format={@voting_format}
+              vote={@vote}
+              compact={@compact}
+              is_winner={false}
+            />
+          </VotingLive>
+        </div>
       {#elseif voted_on and @voting_format == "weighted_multiple"}
-        <div class="flex items-start gap-2 px-3 py-2.5">
+        <div class="flex items-start gap-2 rounded-lg px-3 py-2.5 bg-base-content/[0.03]">
           <div class="min-w-0 flex-1">
             <ChoiceContentLive
               question={@question}
@@ -179,27 +342,23 @@
               compact={@compact}
               is_winner={false}
             />
-            {#case @user_score}
+            {#case score_label(@user_score)}
               {#match nil}
-              {#match score}
-                {#case score_label(score)}
-                  {#match nil}
-                  {#match {_v, name, icon, _desc}}
-                    <div
-                      class="mt-1 inline-flex items-center gap-1.5 text-xs"
-                      data-role="your-score"
-                      data-score={"#{score}"}
-                    >
-                      <span class="text-base-content/60">{l("Your vote:")}</span>
-                      <Iconify.iconify icon={icon} class={["h-4 w-4", score_color_class(score)]} />
-                      <span class={["font-medium", score_color_class(score)]}>{name}</span>
-                    </div>
-                {/case}
+              {#match {_v, name, icon, _desc}}
+                <div
+                  class="mt-1 inline-flex items-center gap-1.5 text-xs"
+                  data-role="your-score"
+                  data-score={"#{@user_score}"}
+                >
+                  <span class="text-base-content/60">{l("Your reaction:")}</span>
+                  <Iconify.iconify icon={icon} class={["h-4 w-4", score_color_class(@user_score)]} />
+                  <span class={["font-medium", score_color_class(@user_score)]}>{name}</span>
+                </div>
             {/case}
           </div>
         </div>
       {#elseif voted_on}
-        <div class="flex items-center gap-3 px-3 py-2.5">
+        <div class="flex items-center gap-3 rounded-lg px-3 py-2.5 bg-base-content/[0.03]">
           <Iconify.iconify
             icon="ph:check-circle-fill"
             class="h-4 w-4 text-primary shrink-0"
