@@ -110,6 +110,53 @@ defmodule Bonfire.Poll.Questions do
 
   def voting_ended?(_), do: false
 
+  @doc """
+  Instance-wide policy for when poll results become visible to non-owners.
+  Override in `config :bonfire_poll, :results_visibility`. One of:
+  `:after_vote` (default) · `:after_close` · `:always`.
+  """
+  def results_visibility_policy,
+    do: Config.get([:bonfire_poll, :results_visibility], :after_vote)
+
+  @doc """
+  Single source of truth for whether a poll's results are visible to the viewer,
+  used by both the LiveView preview and the GraphQL resolvers (which previously
+  applied two slightly different rules).
+
+  The poll's owner/editor always sees results. Otherwise the instance
+  `results_visibility_policy/0` decides: `:always`, `:after_close` (only once
+  voting ends), or `:after_vote` (once the viewer has voted, or after close). A
+  per-poll `hide_results` always defers to close, regardless of policy.
+
+  `opts`: `:current_user`, `:viewer_voted?` (defaults `false`; a `0`-arity fun is
+  accepted and only called when the `:after_vote` branch needs it, so callers can
+  defer a "did they vote?" query), and `:ended?` / `:policy` to override the
+  computed close-state / instance policy (the preview passes its already-computed
+  values; tests pass them explicitly).
+  """
+  def results_visible?(question, opts \\ []) do
+    current_user = current_user(opts)
+    ended? = if Keyword.has_key?(opts, :ended?), do: opts[:ended?], else: voting_ended?(question)
+
+    cond do
+      current_user && Bonfire.Boundaries.can?(current_user, :edit, question) ->
+        true
+
+      e(question, :hide_results, false) and not ended? ->
+        false
+
+      true ->
+        case opts[:policy] || results_visibility_policy() do
+          :always -> true
+          :after_close -> ended?
+          _after_vote -> ended? or viewer_voted?(opts[:viewer_voted?])
+        end
+    end
+  end
+
+  defp viewer_voted?(value) when is_function(value, 0), do: value.() == true
+  defp viewer_voted?(value), do: value == true
+
   @doc "Returns true if proposal period is currently open for the poll."
   def proposal_open?(%Question{proposal_dates: proposal_dates}) do
     now = DateTime.utc_now()

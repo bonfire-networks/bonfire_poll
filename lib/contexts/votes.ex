@@ -2,7 +2,6 @@ defmodule Bonfire.Poll.Votes do
   use Bonfire.Common.Utils
   use Bonfire.Common.Repo
   use Arrows
-  # import Bonfire.Poll
   import ActivityPub.Config, only: [is_in: 2]
   alias Bonfire.Poll.{Questions, Question, Vote}
   alias Ecto.Changeset
@@ -23,17 +22,17 @@ defmodule Bonfire.Poll.Votes do
       {"Update", "Answer"}
     ]
 
-  # TODO: configurable
   def scores,
     do: [
       {"∞", "Block", "ph:prohibit-bold",
        "I need to express a veto, because this would harm a person or group, or it goes against our shared values or goals"},
-      {-2, "Disagree", "ph:smiley-sad", "I am strongly opposed"},
-      {-1, "Concerned", "ph:smiley-meh",
+      {-2, "Disagree", "ph:smiley-sad-duotone", "I am strongly opposed"},
+      {-1, "Concerned", "ph:smiley-meh-duotone",
        "I think this may be a mistake, or I have a different opinion"},
-      {0, "Neutral", "ph:smiley-blank", "Not relevant to me, I don't have an opinion"},
-      {1, "Seems fine", "ph:smiley", "I'm OK to try this for now"},
-      {2, "Great", "ph:smiley-wink", "This meets my needs and aligns with my values and goals"}
+      {0, "Neutral", "ph:smiley-blank-duotone", "Not relevant to me, I don't have an opinion"},
+      {1, "Seems fine", "ph:smiley-duotone", "I'm OK to try this for now"},
+      {2, "Great", "ph:smiley-wink-duotone",
+       "This meets my needs and aligns with my values and goals"}
     ]
 
   def get(subject, object, opts \\ []),
@@ -91,7 +90,9 @@ defmodule Bonfire.Poll.Votes do
       |> repo().many()
 
   @doc """
-  Returns votes count or weighted total for a choice, only if poll voting is closed or owned by current user.
+  Returns votes count or weighted total for a choice, only if the poll's results
+  are visible to the viewer (see `Questions.results_visible?/2` and the instance
+  `:results_visibility` policy).
 
   For weighted_multiple polls, returns the sum of weights for all votes on the choice.
   For other formats, returns the count of votes.
@@ -101,12 +102,10 @@ defmodule Bonfire.Poll.Votes do
     if results_visible?(choice, poll, opts) do
       case Map.get(poll, :voting_format, nil) || Bonfire.Poll.Questions.default_voting_format() do
         "weighted_multiple" ->
-          # Get all votes for this choice and calculate weights
           for_choice(choice, opts)
           ~> calculate_total(poll)
 
         _ ->
-          # just count votes
           count(choice, opts)
       end
     else
@@ -131,12 +130,39 @@ defmodule Bonfire.Poll.Votes do
     end
   end
 
-  @doc "Returns true a choice only if poll voting is closed or owned by current user"
-  def results_visible?(choice, poll, opts \\ []) do
-    current_user = current_user(opts)
-    is_owner = current_user && Bonfire.Boundaries.can?(current_user, :edit, poll)
+  @doc """
+  Whether a poll's results are visible to the viewer. Delegates to the single
+  policy in `Questions.results_visible?/2`; the `choice` arg is unused (results
+  visibility is a poll-level decision) but kept for the existing call sites.
 
-    is_owner || Questions.voting_ended?(poll)
+  The API path (unlike the UI preview) doesn't precompute `viewer_voted?`, so we
+  pass a lazy, request-memoized lookup: under `:after_vote` a voter sees results
+  just as in the UI, while closed/owner/`:always` polls never run the query.
+  """
+  def results_visible?(_choice, poll, opts \\ []) do
+    Questions.results_visible?(
+      poll,
+      Keyword.put_new(opts, :viewer_voted?, fn -> viewer_voted_once?(poll, opts) end)
+    )
+  end
+
+  defp viewer_voted_once?(poll, opts) do
+    with %{} = user <- current_user(opts),
+         poll_id when is_binary(poll_id) <- id(poll) do
+      key = {:poll_viewer_voted?, poll_id, id(user)}
+
+      case Process.get(key) do
+        nil ->
+          voted? = MapSet.member?(voted_question_ids(user, [poll_id]), poll_id)
+          Process.put(key, voted?)
+          voted?
+
+        cached ->
+          cached
+      end
+    else
+      _ -> false
+    end
   end
 
   def count(filters \\ [], opts \\ [])
@@ -160,24 +186,48 @@ defmodule Bonfire.Poll.Votes do
   def counts_for_questions([]), do: %{}
 
   def counts_for_questions(question_ids) when is_list(question_ids) do
-    from(r in Bonfire.Data.Assort.Ranked,
-      join: e in Bonfire.Data.Edges.Edge,
-      on: e.object_id == r.item_id,
-      join: v in Bonfire.Poll.Vote,
-      on: v.id == e.id,
-      where: r.scope_id in ^question_ids,
-      group_by: r.scope_id,
-      select: {r.scope_id, count(v.id)}
-    )
+    question_ids
+    |> questions_votes_query()
+    |> group_by([ranked: r], r.scope_id)
+    |> select([ranked: r, vote: v], {r.scope_id, count(v.id)})
     |> repo().all()
     |> Map.new()
   end
 
   def counts_for_questions(_), do: %{}
 
+  @doc """
+  The subset of `question_ids` the `voter` has cast any vote on, as a `MapSet`.
+  One grouped query; lets a glanceable widget show a per-poll "you've voted"
+  state without loading each poll's full vote model. Empty for a nil voter.
+  """
+  def voted_question_ids(nil, _question_ids), do: MapSet.new()
+
+  def voted_question_ids(voter, question_ids) do
+    case {id(voter), question_ids(question_ids)} do
+      {voter_id, [_ | _] = ids} when is_binary(voter_id) ->
+        ids
+        |> questions_votes_query()
+        |> where([edge: e], e.subject_id == ^voter_id)
+        |> distinct(true)
+        |> select([ranked: r], r.scope_id)
+        |> repo().all()
+        |> MapSet.new()
+
+      _ ->
+        MapSet.new()
+    end
+  end
+
   @doc "Empty read model for a question's poll preview vote state."
   def empty_preview_vote_state,
-    do: %{counts_by_choice_id: %{}, vetoed_choice_ids: MapSet.new(), my_vote_weights: %{}}
+    do: %{
+      counts_by_choice_id: %{},
+      vetoed_choice_ids: MapSet.new(),
+      my_vote_weights: %{},
+      score_histogram_by_choice_id: %{},
+      voter_count: 0
+    }
 
   @doc """
   Vote state for a single question preview.
@@ -203,53 +253,83 @@ defmodule Bonfire.Poll.Votes do
     * `:counts_by_choice_id` - aggregate vote counts, `%{choice_id => count}`
     * `:vetoed_choice_ids` - choices with at least one veto vote
     * `:my_vote_weights` - the current viewer's own votes, `%{choice_id => weight}`
+    * `:score_histogram_by_choice_id` - per-choice vote-weight histogram,
+      `%{vote_weight => count}` (nil key = Block/veto)
+    * `:voter_count` - distinct number of people who cast any vote on the
+      question (the honest denominator for "% of voters" in multi-select polls,
+      where the sum of per-choice counts overcounts people who picked several)
 
   Missing choices mean zero votes / no viewer vote.
   """
   def preview_vote_state_for_questions(questions, current_user \\ nil) do
     question_ids = question_ids(questions)
-    counts_by_question = choice_counts_for_questions(question_ids)
-    vetoes_by_question = vetoed_choice_ids_for_questions(question_ids)
+    histograms_by_question = score_histogram_for_questions(question_ids)
+    voters_by_question = voter_counts_for_questions(question_ids)
     my_votes_by_question = voter_choice_weights_for_questions(current_user, question_ids)
 
     Map.new(question_ids, fn question_id ->
+      histograms = Map.get(histograms_by_question, question_id, %{})
+
       {question_id,
        %{
-         counts_by_choice_id: Map.get(counts_by_question, question_id, %{}),
-         vetoed_choice_ids: Map.get(vetoes_by_question, question_id, MapSet.new()),
-         my_vote_weights: Map.get(my_votes_by_question, question_id, %{})
+         counts_by_choice_id: counts_from_histograms(histograms),
+         vetoed_choice_ids: vetoed_from_histograms(histograms),
+         my_vote_weights: Map.get(my_votes_by_question, question_id, %{}),
+         score_histogram_by_choice_id: histograms,
+         voter_count: Map.get(voters_by_question, question_id, 0)
        }}
     end)
   end
 
-  defp choice_counts_for_questions(questions) do
+  # `counts_by_choice_id` and `vetoed_choice_ids` are derived in-memory from the
+  # per-choice vote-weight histogram (a strict superset of both) instead of being
+  # run as their own grouped queries — keeping the read model at three DB
+  # round-trips, not five, no matter how many polls render.
+  defp counts_from_histograms(choice_histograms) do
+    Map.new(choice_histograms, fn {choice_id, buckets} ->
+      {choice_id, buckets |> Map.values() |> Enum.sum()}
+    end)
+  end
+
+  defp vetoed_from_histograms(choice_histograms) do
+    for {choice_id, buckets} <- choice_histograms,
+        Map.get(buckets, nil, 0) > 0,
+        into: MapSet.new(),
+        do: choice_id
+  end
+
+  # Per-choice histogram of vote weights for many questions, in one grouped query.
+  # Returns %{question_id => %{choice_id => %{vote_weight => count}}}; the nil
+  # vote_weight key counts Block/veto votes. Missing keys mean zero votes.
+  defp score_histogram_for_questions(questions) do
     question_ids = question_ids(questions)
 
     if question_ids == [] do
       %{}
     else
       questions_votes_query(question_ids)
-      |> group_by([ranked: r], [r.scope_id, r.item_id])
-      |> select([ranked: r, vote: v], {r.scope_id, r.item_id, count(v.id)})
+      |> group_by([ranked: r, vote: v], [r.scope_id, r.item_id, v.vote_weight])
+      |> select([ranked: r, vote: v], {r.scope_id, r.item_id, v.vote_weight, count(v.id)})
       |> repo().all()
-      |> nested_choice_map()
+      |> nested_histogram_map()
     end
   end
 
-  defp vetoed_choice_ids_for_questions(questions) do
+  # Distinct number of people who cast any vote, per question, in one grouped
+  # query. Returns `%{question_id => count}`. Unlike summing per-choice counts,
+  # this counts each voter once even in multi-select polls — the honest
+  # denominator for "% of voters who picked this option".
+  defp voter_counts_for_questions(questions) do
     question_ids = question_ids(questions)
 
     if question_ids == [] do
       %{}
     else
       questions_votes_query(question_ids)
-      |> where([vote: v], is_nil(v.vote_weight))
-      |> distinct(true)
-      |> select([ranked: r], {r.scope_id, r.item_id})
+      |> group_by([ranked: r], r.scope_id)
+      |> select([ranked: r, edge: e], {r.scope_id, count(e.subject_id, :distinct)})
       |> repo().all()
-      |> Enum.reduce(%{}, fn {question_id, choice_id}, acc ->
-        Map.update(acc, question_id, MapSet.new([choice_id]), &MapSet.put(&1, choice_id))
-      end)
+      |> Map.new()
     end
   end
 
@@ -289,6 +369,43 @@ defmodule Bonfire.Poll.Votes do
     Map.update(acc, question_id, %{choice_id => value}, &Map.put(&1, choice_id, value))
   end
 
+  defp nested_histogram_map(rows) do
+    Enum.reduce(rows, %{}, fn {question_id, choice_id, vote_weight, count}, acc ->
+      put_nested_histogram(acc, question_id, choice_id, vote_weight, count)
+    end)
+  end
+
+  @doc """
+  Inserts a `count` at a `vote_weight` bucket into a 3-level histogram map
+  `%{question_id => %{choice_id => %{vote_weight => count}}}`, building any
+  missing levels on the way. The `nil` vote_weight bucket is Block/veto, kept
+  distinct from the `0` (Neutral) bucket.
+
+  ## Examples
+
+      iex> Bonfire.Poll.Votes.put_nested_histogram(%{}, "q1", "c1", 1, 5)
+      %{"q1" => %{"c1" => %{1 => 5}}}
+
+      iex> Bonfire.Poll.Votes.put_nested_histogram(%{"q1" => %{"c1" => %{2 => 3}}}, "q1", "c1", 1, 2)
+      %{"q1" => %{"c1" => %{2 => 3, 1 => 2}}}
+
+      iex> Bonfire.Poll.Votes.put_nested_histogram(%{"q1" => %{"c1" => %{2 => 3}}}, "q1", "c2", nil, 1)
+      %{"q1" => %{"c1" => %{2 => 3}, "c2" => %{nil => 1}}}
+
+      iex> Bonfire.Poll.Votes.put_nested_histogram(%{"q1" => %{"c1" => %{2 => 3}}}, "q2", "c3", 0, 7)
+      %{"q1" => %{"c1" => %{2 => 3}}, "q2" => %{"c3" => %{0 => 7}}}
+  """
+  def put_nested_histogram(acc, question_id, choice_id, vote_weight, count) do
+    Map.update(
+      acc,
+      question_id,
+      %{choice_id => %{vote_weight => count}},
+      &Map.update(&1, choice_id, %{vote_weight => count}, fn choice_hist ->
+        Map.put(choice_hist, vote_weight, count)
+      end)
+    )
+  end
+
   defp questions_votes_query(question_ids) do
     from(r in Bonfire.Data.Assort.Ranked,
       as: :ranked,
@@ -304,14 +421,6 @@ defmodule Bonfire.Poll.Votes do
 
   def vote(voter, question, choices, opts \\ [])
 
-  #   def vote(%{} = voter, %{} = question, choices, opts) do
-  #     if Bonfire.Boundaries.can?(voter, :vote, question) do
-  #       vote(voter, question, choices, opts)
-  #     else
-  #       error(l("Sorry, you cannot vote on this"))
-  #     end
-  #   end
-
   def vote(%{} = voter, question, choices, opts) when is_binary(question) do
     with {:ok, question} <-
            Bonfire.Poll.Questions.read(
@@ -319,12 +428,10 @@ defmodule Bonfire.Poll.Votes do
              opts ++
                [
                  current_user: voter,
-                 #  verbs: [:vote]
                  # FIXME: temp until we run fixtures with vote verb
                  verbs: [:vote]
                ]
            ) do
-      # debug(choice)
       vote(voter, question, choices, opts)
     else
       _ ->
@@ -363,7 +470,6 @@ defmodule Bonfire.Poll.Votes do
         %{choice_id: cid}, acc -> Map.put(acc, cid, 1)
         _, acc -> acc
       end)
-      |> Map.new()
 
     # assumes choices contains choice IDs as key and weight as values
     choices_weights
@@ -373,7 +479,6 @@ defmodule Bonfire.Poll.Votes do
       opts ++
         [
           current_user: voter,
-          #  verbs: [:vote], # TODO
           skip_boundary_check: true
         ]
     )
@@ -421,17 +526,21 @@ defmodule Bonfire.Poll.Votes do
       |> List.wrap()
       |> Enum.map(&Objects.object_creator(e(&1, :edge, :object, nil)))
 
+    # Notify the question's creator and any chosen-option proposers, but never
+    # the voter themselves. `maybe_creator_notification/3` only self-suppresses a
+    # *single* creator, so we filter the voter out across all creators here.
+    notify_creators =
+      [object_creator | List.wrap(choice_creators)]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.reject(&(id(&1) == id(voter)))
+      |> Enum.uniq_by(&id/1)
+
     opts =
       [
         # TODO: make configurable
         boundary: "mentions",
         to_circles: [Enums.id(object_creator), Enums.ids(choice_creators)],
-        to_feeds:
-          Feeds.maybe_creator_notification(
-            voter,
-            [object_creator, choice_creators],
-            opts
-          )
+        to_feeds: if(notify_creators == [], do: [], else: [notifications: notify_creators])
       ] ++ List.wrap(opts)
 
     case do_create_vote_activity(voter, question, opts) do
@@ -470,14 +579,6 @@ defmodule Bonfire.Poll.Votes do
   def query(filters, opts) do
     query_base(filters, opts)
   end
-
-  #   def get_total(proposal, votes, %{} = question) do
-  #     proposal_id = id(proposal)
-  #
-  #     votes
-  #     |> Enum.filter(fn vote -> vote.proposal_id == proposal_id end)
-  #     |> get_total(question)
-  #   end
 
   @doc """
   Sums the weights of all votes for a choice.
@@ -541,7 +642,6 @@ defmodule Bonfire.Poll.Votes do
       when is_integer(total) and is_integer(num_voters) do
     if num_voters > 0 do
       i = total / num_voters
-      #   round(i * 100) / 100
       round(i)
     else
       0

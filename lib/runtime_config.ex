@@ -19,6 +19,12 @@ defmodule Bonfire.Poll.RuntimeConfig do
     # config :bonfire_poll,
     #   modularity: :disabled
 
+    # When poll results become visible to people other than the poll's owner:
+    #   :after_vote (default) — once the viewer has voted, or after the poll closes
+    #   :after_close          — only after voting ends
+    #   :always               — always visible
+    config :bonfire_poll, :results_visibility, :after_vote
+
     config :bonfire, :ui,
       activity_preview: [
         # TODO: vote activity
