@@ -42,6 +42,9 @@ defmodule Bonfire.Poll.RuntimeConfig do
           {Bonfire.Poll.Acts.PresetAttrs, @question_act_opts},
           {Bonfire.Poll.Question.Create, @question_act_opts},
           {Bonfire.Social.Acts.PostContents, @question_act_opts},
+          # Sets thread/reply_to (creates a `Replied` record, with reply_to_id=nil for a
+          # non-reply) so polls can participate in threaded discussions like posts.
+          {Bonfire.Social.Acts.Threaded, @question_act_opts},
           {Bonfire.Me.Acts.Caretaker, @question_act_opts},
           {Bonfire.Me.Acts.Creator, @question_act_opts},
           {Bonfire.Files.Acts.URLPreviews, @question_act_opts},
