@@ -21,12 +21,37 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     object :poll do
       field(:id, :id)
       field(:post_content, :post_content)
-      field(:choices, list_of(:choice))
+
+      field :choices, list_of(:choice) do
+        # Load choices here because only the poll resolver has both poll and choice context.
+        resolve(fn poll, _, info ->
+          user = GraphQL.current_user(info)
+          visible = Votes.results_visible?(nil, poll, current_user: user)
+
+          counts =
+            if visible,
+              do: Votes.preview_vote_state_for_question(poll, user).counts_by_choice_id,
+              else: %{}
+
+          choices =
+            poll_choices(poll)
+            |> Enum.map(fn ch ->
+              Map.put(
+                ch,
+                :votes_result_total,
+                if(visible, do: Map.get(counts, ch.id, 0), else: nil)
+              )
+            end)
+
+          {:ok, choices}
+        end)
+      end
+
       field(:activity, :activity)
 
       field :proposals_open_at, :datetime do
         resolve(fn poll, _, _ ->
-          {:ok, poll.proposal_dates |> List.first()}
+          {:ok, (poll.proposal_dates || []) |> List.first()}
         end)
       end
 
@@ -38,7 +63,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :voting_open_at, :datetime do
         resolve(fn poll, _, _ ->
-          {:ok, poll.voting_dates |> List.first()}
+          {:ok, (poll.voting_dates || []) |> List.first()}
         end)
       end
 
@@ -50,65 +75,36 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :votes_count, :integer do
         resolve(fn poll, _, _ ->
-          # Sum votes for all choices
-          count =
-            poll.choices
-            # TODO: avoid N+1?
-            |> Enum.map(fn choice -> Bonfire.Poll.Votes.count(choice, []) end)
-            |> Enum.sum()
-
-          {:ok, count}
+          # Use the per-question read model so counts stay scoped to this poll.
+          {:ok, Votes.counts_for_questions([poll.id]) |> Map.get(poll.id, 0)}
         end)
       end
 
       field :voters_count, :integer do
         resolve(fn poll, _, _ ->
-          # Get all votes for choices, extract unique voter ids
-          votes =
-            poll.choices
-            |> Enum.flat_map(fn choice ->
-              # TODO: avoid N+1 and avoid loading full data if we only need a count?
-              Bonfire.Poll.Votes.query([object: choice], []) |> Bonfire.Poll.Votes.repo().all()
-            end)
-
-          count =
-            votes
-            |> Enum.map(& &1.subject_id)
-            |> Enum.uniq()
-            |> length()
-
-          {:ok, count}
+          # Distinct voters for THIS poll (read model), not globally.
+          {:ok, Votes.preview_vote_state_for_question(poll).voter_count}
         end)
       end
 
       field :voted, :boolean do
-        resolve(fn poll, _, %{context: %{current_user: user}} ->
-          voted =
-            poll.choices
-            |> Enum.any?(fn choice ->
-              # TODO: avoid N+1
-              case Bonfire.Poll.Votes.get(user, choice) do
-                {:ok, _} -> true
-                _ -> false
-              end
-            end)
-
-          {:ok, voted}
+        # Unauthenticated requests have no current_user and should resolve false.
+        resolve(fn poll, _, info ->
+          user = GraphQL.current_user(info)
+          {:ok, MapSet.member?(Votes.voted_question_ids(user, [poll.id]), poll.id)}
         end)
       end
 
       field :own_votes, list_of(:choice) do
-        resolve(fn poll, _, %{context: %{current_user: user}} ->
-          voted_choices =
-            poll.choices
-            |> Enum.filter(fn choice ->
-              case Bonfire.Poll.Votes.get(user, choice) do
-                {:ok, _} -> true
-                _ -> false
-              end
-            end)
+        resolve(fn poll, _, info ->
+          user = GraphQL.current_user(info)
 
-          {:ok, voted_choices}
+          voted_ids =
+            Votes.preview_vote_state_for_question(poll, user).my_vote_weights
+            |> Map.keys()
+            |> MapSet.new()
+
+          {:ok, poll_choices(poll) |> Enum.filter(&MapSet.member?(voted_ids, &1.id))}
         end)
       end
 
@@ -121,17 +117,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field(:id, :id)
       field(:post_content, :post_content)
 
-      field(:votes_result_total, :integer) do
-        resolve(fn choice, _, %{source: poll, context: %{current_user: user}} ->
-          {:ok, Bonfire.Poll.Votes.calculate_if_visible(choice, poll, current_user: user)}
-        end)
-      end
-
-      field(:votes_result_average, :integer) do
-        resolve(fn choice, _, %{source: poll, context: %{current_user: user}} ->
-          {:ok, Bonfire.Poll.Votes.calculate_average_if_visible(choice, poll, current_user: user)}
-        end)
-      end
+      # Enriched by the poll choices resolver, where result visibility is known.
+      field(:votes_result_total, :integer)
+      # Kept for schema/fragment compatibility; not currently populated.
+      field(:votes_result_average, :integer)
     end
 
     object :score do
@@ -185,6 +174,10 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         arg(:reply_to, :id)
         arg(:boundary, :string)
         arg(:to_circles, list_of(:id))
+        # Publish the poll into this group/topic (category) id — like createPost.
+        arg(:context_id, :id)
+        # Without a voting window the poll has nil voting_dates and cannot be voted on.
+        arg(:duration_hours, :integer)
 
         resolve(&create_poll/2)
       end
@@ -195,6 +188,12 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
         resolve(&vote/2)
       end
+    end
+
+    # Choices may be unpreloaded depending on the feed path.
+    defp poll_choices(poll) do
+      Bonfire.Common.Repo.maybe_preload(poll, choices: [:post_content])
+      |> e(:choices, [])
     end
 
     # def list_polls(_parent, args, info) do
@@ -228,12 +227,29 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       current_user = GraphQL.current_user(info)
 
       if current_user do
-        [
-          current_user: current_user,
-          question_attrs: args
-          #  boundary: e(params, "to_boundaries", "mentions")
-        ]
-        |> Questions.create()
+        case args[:duration_hours] || 72 do
+          hours when is_integer(hours) and hours > 0 ->
+            now = DateTime.utc_now()
+
+            question_attrs =
+              Map.put(args, :voting_dates, [now, DateTime.add(now, hours * 3600, :second)])
+
+            opts = [
+              current_user: current_user,
+              question_attrs: question_attrs
+              #  boundary: e(params, "to_boundaries", "mentions")
+            ]
+
+            opts =
+              if args[:context_id],
+                do: opts ++ [context_id: args[:context_id]],
+                else: opts
+
+            Questions.create(opts)
+
+          _ ->
+            {:error, "duration_hours must be a positive integer"}
+        end
       else
         {:error, "Not authenticated"}
       end
