@@ -252,6 +252,64 @@ defmodule Bonfire.Poll.Questions do
   """
   defdelegate vote_counts_for_questions(question_ids), to: Votes, as: :counts_for_questions
 
+  # --- "Polls closing soon" widget loader (cached per user + limit) ---
+
+  @doc """
+  `%{polls, counts}` for the "Polls closing soon" widget — the open polls closing soonest plus a
+  grouped vote-count map keyed by question id. Cached per user and limit for 1h, and self-busts
+  when most of the cached polls have already ended (so a stale list doesn't linger). Pass the
+  standard `:cache` opt (`cache: :refresh` busts + recomputes — the widget's manual refresh button;
+  the key is built once by `closing_soon_cache_key/2`). (The viewer's `voted_ids` are read fresh by
+  the widget, not cached, so "you've voted" never lags a vote.)
+  """
+  def closing_soon_widget(current_user, limit, opts \\ []) do
+    cache_key = closing_soon_cache_key(current_user, limit)
+    result = closing_soon_cached(current_user, limit, cache_key, opts)
+
+    case result do
+      %{polls: polls} ->
+        if mostly_ended?(polls) do
+          # stale list lingered — bust + recompute (drop any one-shot :cache verb already applied)
+          closing_soon_cached(current_user, limit, cache_key, cache: :refresh)
+        else
+          result
+        end
+
+      # e.g. `cache: :reset` returned the remove result — nothing to post-process
+      other ->
+        other
+    end
+  end
+
+  defp closing_soon_cached(current_user, limit, cache_key, opts \\ []) do
+    Cache.maybe_apply_cached(
+      &do_closing_soon/2,
+      [current_user, limit],
+      opts
+      |> Keyword.put(:cache_key, cache_key)
+      |> Keyword.put_new(:expire, :timer.minutes(60))
+    )
+  end
+
+  defp do_closing_soon(current_user, limit) do
+    polls = list_closing_soon([current_user: current_user], limit)
+    counts = vote_counts_for_questions(Enum.map(polls, & &1.id))
+    %{polls: polls, counts: counts}
+  end
+
+  @doc "Cache key for `closing_soon_widget/3` — used by both the loader and any reset, so they can't drift."
+  def closing_soon_cache_key(current_user, limit),
+    do: "widget_polls_closing_soon:#{id(current_user) || "guest"}:#{limit}"
+
+  defp mostly_ended?([]), do: false
+
+  defp mostly_ended?(polls) when is_list(polls) do
+    ended_count = Enum.count(polls, &voting_ended?/1)
+    ended_count >= length(polls) / 2
+  end
+
+  defp mostly_ended?(_), do: false
+
   @doc "List posts with pagination"
   def list_paginated(filters, opts \\ [])
 

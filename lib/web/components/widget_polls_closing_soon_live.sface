@@ -5,6 +5,8 @@
       {#match %{polls: polls, counts: counts, voted_ids: voted_ids}}
         <Bonfire.UI.Common.WidgetBlockLive
           widget_title={@widget_title || l("Polls closing soon")}
+          reset_cache_event="Bonfire.Poll.Web.WidgetPollsClosingSoonLive:reset_polls_closing_soon"
+          reset_cache_values={%{limit: @limit}}
           title_class="pb-3 px-1 text-sm font-bold uppercase tracking-widest text-secondary"
           class="w-full p-3 lg:p-4 relative overflow-hidden lg:rounded-box bg-gradient-to-br from-secondary/25 via-secondary/10 to-transparent"
           empty={polls == []}

@@ -8,7 +8,6 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
   """
   use Bonfire.UI.Common.Web, :stateless_component
 
-  alias Bonfire.Common.Cache
   alias Bonfire.Poll.Questions
   alias Bonfire.Poll.Votes
   alias Bonfire.Poll.Web.Preview.QuestionLive
@@ -25,45 +24,26 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
   fresh on each render so a viewer's "you've voted" state never lags their vote.
   """
   def load(current_user, limit) do
-    cache_key = "widget_polls_closing_soon:#{cache_user_id(current_user)}:#{limit}"
-    result = load_cached(current_user, limit, cache_key)
-
-    result =
-      if mostly_ended?(result.polls) do
-        Cache.remove(cache_key)
-        load_cached(current_user, limit, cache_key)
-      else
-        result
-      end
+    result = Questions.closing_soon_widget(current_user, limit)
 
     voted_ids = Votes.voted_question_ids(current_user, Enum.map(result.polls, & &1.id))
     Map.put(result, :voted_ids, voted_ids)
   end
 
-  defp load_cached(current_user, limit, cache_key) do
-    Cache.maybe_apply_cached(&do_load/2, [current_user, limit],
-      cache_key: cache_key,
-      expire: :timer.minutes(60)
-    )
+  @doc "Busts the closing-soon cache for the current viewer (recomputed lazily on next read)."
+  def handle_event("reset_polls_closing_soon", params, socket) do
+    Questions.closing_soon_widget(current_user(socket), reset_limit(params), cache: :reset)
+
+    {:noreply,
+     assign_flash(
+       socket,
+       :info,
+       l("Polls have been reset.") <> l(" You need to reload to see updates, if any.")
+     )}
   end
 
-  defp do_load(current_user, limit) do
-    polls = Questions.list_closing_soon([current_user: current_user], limit)
-    counts = Questions.vote_counts_for_questions(Enum.map(polls, & &1.id))
-    %{polls: polls, counts: counts}
-  end
-
-  defp cache_user_id(nil), do: "guest"
-  defp cache_user_id(current_user), do: Bonfire.Common.Enums.id(current_user) || "guest"
-
-  defp mostly_ended?([]), do: false
-
-  defp mostly_ended?(polls) when is_list(polls) do
-    ended_count = Enum.count(polls, &Questions.voting_ended?/1)
-    ended_count >= length(polls) / 2
-  end
-
-  defp mostly_ended?(_), do: false
+  defp reset_limit(%{"limit" => limit}) when is_binary(limit), do: String.to_integer(limit)
+  defp reset_limit(_), do: 3
 
   @doc "Closing-time label for a poll. Mirrors QuestionLive.time_remaining/1."
   def closes_in(question) do
