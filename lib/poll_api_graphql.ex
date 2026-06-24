@@ -13,6 +13,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     alias Bonfire.API.GraphQL.Pagination
     alias Bonfire.Common.Utils
     alias Bonfire.Common.Types
+    alias Bonfire.Poll.Question
     alias Bonfire.Poll.Questions
     alias Bonfire.Poll.Votes
 
@@ -27,21 +28,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         resolve(fn poll, _, info ->
           user = GraphQL.current_user(info)
           visible = Votes.results_visible?(nil, poll, current_user: user)
-
-          counts =
-            if visible,
-              do: Votes.preview_vote_state_for_question(poll, user).counts_by_choice_id,
-              else: %{}
+          vote_state = Votes.preview_vote_state_for_question(poll, user)
 
           choices =
             poll_choices(poll)
-            |> Enum.map(fn ch ->
-              Map.put(
-                ch,
-                :votes_result_total,
-                if(visible, do: Map.get(counts, ch.id, 0), else: nil)
-              )
-            end)
+            |> enrich_choice_results(poll, vote_state, visible)
 
           {:ok, choices}
         end)
@@ -98,13 +89,21 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field :own_votes, list_of(:choice) do
         resolve(fn poll, _, info ->
           user = GraphQL.current_user(info)
+          vote_state = Votes.preview_vote_state_for_question(poll, user)
 
           voted_ids =
-            Votes.preview_vote_state_for_question(poll, user).my_vote_weights
+            vote_state.my_vote_weights
             |> Map.keys()
             |> MapSet.new()
 
-          {:ok, poll_choices(poll) |> Enum.filter(&MapSet.member?(voted_ids, &1.id))}
+          visible = Votes.results_visible?(nil, poll, current_user: user)
+
+          choices =
+            poll_choices(poll)
+            |> Enum.filter(&MapSet.member?(voted_ids, &1.id))
+            |> enrich_choice_results(poll, vote_state, visible)
+
+          {:ok, choices}
         end)
       end
 
@@ -196,6 +195,57 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       |> e(:choices, [])
     end
 
+    defp enrich_choice_results(choices, poll, vote_state, true) do
+      Enum.map(choices, fn choice ->
+        histogram = Map.get(vote_state.score_histogram_by_choice_id, choice.id, %{})
+        total = choice_result_total(histogram, poll)
+
+        choice
+        |> Map.put(:votes_result_total, total)
+        |> Map.put(:votes_result_average, choice_result_average(histogram, poll, total))
+      end)
+    end
+
+    defp enrich_choice_results(choices, _poll, _vote_state, _visible) do
+      Enum.map(choices, fn choice ->
+        choice
+        |> Map.put(:votes_result_total, nil)
+        |> Map.put(:votes_result_average, nil)
+      end)
+    end
+
+    # Mirrors the web preview's consent net: positives add as-is, negatives are
+    # scaled by weighting, and Block/veto is handled separately from the score.
+    defp choice_result_total(histogram, %{voting_format: "weighted_multiple"} = poll) do
+      weighting = e(poll, :weighting, 1) || 1
+
+      histogram
+      |> Enum.reduce(0, fn
+        {nil, _count}, acc -> acc
+        {weight, count}, acc when weight < 0 -> acc + weight * weighting * count
+        {weight, count}, acc -> acc + weight * count
+      end)
+      |> max(0)
+    end
+
+    defp choice_result_total(histogram, _poll) do
+      histogram
+      |> Map.values()
+      |> Enum.sum()
+    end
+
+    defp choice_result_average(histogram, %{voting_format: "weighted_multiple"}, total) do
+      reactions_count =
+        histogram
+        |> Enum.reject(fn {weight, _count} -> is_nil(weight) end)
+        |> Enum.map(fn {_weight, count} -> count end)
+        |> Enum.sum()
+
+      Votes.calculate_average_base_score(total, reactions_count)
+    end
+
+    defp choice_result_average(_histogram, _poll, _total), do: nil
+
     # def list_polls(_parent, args, info) do
     #   {:ok,
     #    Questions.list_paginated(Map.to_list(args), GraphQL.current_user(info)) |> prepare_list()}
@@ -220,67 +270,108 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
     end
 
     def get_poll(_parent, %{filter: %{id: id}} = _args, info) do
-      Questions.read(id, GraphQL.current_user(info))
+      with {:ok, id} <- cast_question_id(id) do
+        Questions.read(id, GraphQL.current_user(info))
+      else
+        _ -> {:error, "Poll not found"}
+      end
     end
+
+    defp cast_question_id(id) when is_binary(id),
+      do: Ecto.Type.cast(Question.__schema__(:type, :id), id)
+
+    defp cast_question_id(_), do: :error
 
     defp create_poll(args, info) do
       current_user = GraphQL.current_user(info)
 
       if current_user do
-        case args[:duration_hours] || 72 do
-          hours when is_integer(hours) and hours > 0 ->
-            now = DateTime.utc_now()
+        with :ok <- validate_poll_choices(args[:choices]) do
+          case args[:duration_hours] || 72 do
+            hours when is_integer(hours) and hours > 0 ->
+              now = DateTime.utc_now()
 
-            question_attrs =
-              Map.put(args, :voting_dates, [now, DateTime.add(now, hours * 3600, :second)])
+              question_attrs =
+                Map.put(args, :voting_dates, [now, DateTime.add(now, hours * 3600, :second)])
 
-            opts = [
-              current_user: current_user,
-              question_attrs: question_attrs
-              #  boundary: e(params, "to_boundaries", "mentions")
-            ]
+              opts = [
+                current_user: current_user,
+                question_attrs: question_attrs
+                #  boundary: e(params, "to_boundaries", "mentions")
+              ]
 
-            opts =
-              if args[:context_id],
-                do: opts ++ [context_id: args[:context_id]],
-                else: opts
+              opts =
+                if args[:context_id],
+                  do: opts ++ [context_id: args[:context_id]],
+                  else: opts
 
-            Questions.create(opts)
+              Questions.create(opts)
 
-          _ ->
-            {:error, "duration_hours must be a positive integer"}
+            _ ->
+              {:error, "duration_hours must be a positive integer"}
+          end
         end
       else
         {:error, "Not authenticated"}
       end
     end
 
-    defp vote(%{poll_id: question, votes: votes}, info) do
+    defp validate_poll_choices(choices) do
+      case choices |> List.wrap() |> Enum.reject(&poll_choice_empty?/1) do
+        [] -> {:error, "At least one poll choice is required"}
+        _ -> :ok
+      end
+    end
+
+    defp poll_choice_empty?(%{} = choice) do
+      name =
+        e(choice, :name, nil) ||
+          e(choice, "name", nil) ||
+          e(choice, :post_content, :name, nil) ||
+          e(choice, :post_content, "name", nil) ||
+          e(choice, "post_content", "name", nil) ||
+          e(choice, "post_content", :name, nil)
+
+      is_nil(name) or String.trim(to_string(name)) == ""
+    end
+
+    defp poll_choice_empty?(_), do: true
+
+    defp vote(%{poll_id: question} = args, info) do
       current_user = GraphQL.current_user(info)
 
       if not is_nil(current_user) do
-        with {:ok, f} <-
-               Votes.vote(
-                 current_user,
-                 question,
-                 votes
-                 |> Enum.map(fn
-                   %{choice_id: choice_id, weight: weight} = map ->
-                     map
+        votes = args |> Map.get(:votes, []) |> List.wrap()
 
-                   %{choice_id: choice_id} = map ->
-                     Map.put(map, :weight, 1)
-
-                   other ->
-                     error(other, "invalid input")
-                     raise Bonfire.Fail, :invalid_argument
-                 end)
-               ),
-             do: {:ok, e(f, :activity, nil) || f}
+        if votes == [] do
+          {:error, "At least one vote is required"}
+        else
+          with {:ok, f} <-
+                 Votes.vote(
+                   current_user,
+                   question,
+                   Enum.map(votes, &vote_input!/1)
+                 ),
+               do: {:ok, e(f, :activity, nil) || f}
+        end
       else
-        # {:error, "Not authenticated"}  
         raise(Bonfire.Fail.Auth, :needs_login)
       end
+    end
+
+    defp vote_input!(%{choice_id: nil} = other) do
+      error(other, "invalid input")
+      raise Bonfire.Fail, :invalid_argument
+    end
+
+    defp vote_input!(%{choice_id: _choice_id, weight: weight} = map) when not is_nil(weight),
+      do: map
+
+    defp vote_input!(%{choice_id: _choice_id} = map), do: Map.put(map, :weight, 1)
+
+    defp vote_input!(other) do
+      error(other, "invalid input")
+      raise Bonfire.Fail, :invalid_argument
     end
   end
 else
