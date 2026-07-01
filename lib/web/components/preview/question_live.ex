@@ -375,10 +375,10 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   def state_label(_state, _format), do: l("Closed")
 
   @doc "DaisyUI tone for a `decision_state/5` value, matching the status icon."
-  def state_color_class(:open), do: "text-primary"
+  def state_color_class(:open), do: "text-success"
   def state_color_class(:decided), do: "text-success"
   def state_color_class(:no_consensus), do: "text-error"
-  def state_color_class(_state), do: "text-base-content/70"
+  def state_color_class(_state), do: "text-muted"
 
   @doc "Names of the choices whose ids are in `ids` (for carried / blocked summaries)."
   def choice_names(choices, ids) when is_list(choices) do

@@ -85,7 +85,7 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   def score_color_class(score) when is_number(score) and score > 0, do: "text-success"
   def score_color_class(score) when is_number(score) and score < 0, do: "text-warning"
   def score_color_class("∞"), do: "text-error"
-  def score_color_class(_), do: "text-base-content/70"
+  def score_color_class(_), do: "text-muted"
 
   @doc """
   True when there is at least one reaction to chart for this choice.

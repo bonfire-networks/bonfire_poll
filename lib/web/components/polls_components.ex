@@ -35,7 +35,7 @@ defmodule Bonfire.Poll.EditProposalLive do
         phx-target={@event_target}
         data-role="remove-option"
         aria-label={l("Remove option %{n}", n: @index + 1)}
-        class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-base-content/15 text-base-content/60 hover:border-error/40 hover:bg-error/5 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+        class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-base-content/15 text-muted hover:border-error/40 hover:bg-error/5 hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
       >
         <#Icon iconify="ph:trash-duotone" class="h-4 w-4" />
       </button>

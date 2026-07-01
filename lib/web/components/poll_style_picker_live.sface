@@ -4,7 +4,7 @@
   data-role="poll-style-picker"
   class="flex flex-col gap-2"
 >
-  <legend class="text-xs font-medium uppercase tracking-wider text-base-content/55">
+  <legend class="text-xs font-medium uppercase tracking-wider text-muted">
     {l("Style")}
   </legend>
   <div class="grid grid-cols-1 mt-2 sm:grid-cols-3 gap-2">
@@ -23,11 +23,11 @@
         <span class="flex items-center">
           <!-- <Iconify.iconify
             icon={preset.icon}
-            class="h-4 w-4 text-base-content/55 transition group-aria-checked:text-primary"
+            class="h-4 w-4 text-muted transition group-aria-checked:text-primary"
           /> -->
           <span class="text-sm font-medium text-base-content">{preset.name}</span>
         </span>
-        <span class="text-xs leading-snug text-base-content/60">{preset.description}</span>
+        <span class="text-xs leading-snug text-muted">{preset.description}</span>
       </button>
     {/for}
   </div>
@@ -40,7 +40,7 @@
     aria-checked={if @selected_preset == :custom, do: "true", else: "false"}
     data-role="poll-style-option"
     data-preset="custom"
-    class="self-start inline-flex items-center gap-1.5 px-1 text-xs text-base-content/60 hover:text-base-content underline decoration-base-content/20 underline-offset-2 hover:decoration-base-content/50 aria-checked:text-primary aria-checked:font-medium aria-checked:decoration-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-sm"
+    class="self-start inline-flex items-center gap-1.5 px-1 text-xs text-muted hover:text-base-content underline decoration-base-content/20 underline-offset-2 hover:decoration-base-content/50 aria-checked:text-primary aria-checked:font-medium aria-checked:decoration-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 rounded-sm"
   >
     <Iconify.iconify icon="ph:sliders-horizontal-duotone" class="size-4" aria-hidden="true" />
     {l("Or configure custom")}

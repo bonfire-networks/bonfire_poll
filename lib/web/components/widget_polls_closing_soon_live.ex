@@ -89,10 +89,10 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
       cond do
         diff < 3600 -> "text-error font-medium"
         diff < 21_600 -> "text-warning"
-        true -> "text-base-content/60"
+        true -> "text-muted"
       end
     else
-      _ -> "text-base-content/55"
+      _ -> "text-muted"
     end
   end
 end

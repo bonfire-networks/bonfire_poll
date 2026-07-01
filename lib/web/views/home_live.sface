@@ -1,5 +1,5 @@
 {!-- <Bonfire.UI.Common.SmartInputButtonLive
-  class="gap-2 mt-3 normal-case rounded-full btn-outline !border !border-primary/30 btn btn-sm btn-primary"
+  class="gap-2 mt-3 normal-case rounded-full btn-outline !border !border-secondary btn btn-sm btn-primary"
   icon="material-symbols:how-to-vote"
   prompt={l("Create a poll")}
   component={Bonfire.Poll.Web.CreatePollLive}
