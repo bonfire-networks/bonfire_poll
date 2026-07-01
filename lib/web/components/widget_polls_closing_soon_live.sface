@@ -2,7 +2,7 @@
   {#match nil}
   {#match current_user}
     {#case load(current_user, @limit)}
-      {#match %{polls: polls, counts: counts, voted_ids: voted_ids}}
+      {#match %{polls: polls, vote_state: vote_state}}
         <Bonfire.UI.Common.WidgetBlockLive
           widget_title={@widget_title || l("Polls closing soon")}
           reset_cache_event="Bonfire.Poll.Web.WidgetPollsClosingSoonLive:reset_polls_closing_soon"
@@ -13,59 +13,46 @@
           empty_icon="ph:list-checks-duotone"
           empty_message={l("No open polls yet. Why not start one and get people voting?")}
         >
-          <div class="flex flex-col   divide-hair divide-secondary">
-            {#for poll <- polls}
-              {#case kind(poll)}
-                {#match {kind_label, kind_icon}}
-                  <article class="group flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-                    <div class="flex-shrink-0 rounded flex items-center place-content-center bg-secondary/10 p-2 text-secondary">
-                      <Iconify.iconify icon={kind_icon} class="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    <div class="flex flex-col gap-0.5 min-w-0 flex-1">
-                      <div class="flex items-start gap-2">
-                        <LinkLive
-                          to={path(poll)}
-                          class="text-sm font-medium link link-hover line-clamp-2 leading-snug min-w-0 flex-1"
-                        >
-                          {rich(
-                            e(poll, :post_content, :name, nil) || e(poll, :post_content, :html_body, nil) ||
-                              l("Untitled poll")
-                          )}
-                        </LinkLive>
-                        {#if voted?(voted_ids, poll)}
-                          <span
-                            class="shrink-0 inline-flex items-center gap-1 text-xs uppercase tracking-wider font-semibold text-base-content/50"
-                            data-role="poll-voted-status"
-                            data-voted="true"
-                          >
-                            {l("Voted")}
-                          </span>
-                        {#else}
-                          <span
-                            class="shrink-0 inline-flex items-center gap-1 text-xs uppercase tracking-wider font-semibold text-primary"
-                            data-role="poll-voted-status"
-                            data-voted="false"
-                          >
-                            <span class="h-2 w-2 rounded-full bg-primary" aria-hidden="true" />
-                            {l("Not voted")}
-                          </span>
-                        {/if}
-                      </div>
-                      <div class="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap text-xs text-muted">
-                        <span>{kind_label}</span>
-                        <span class="text-base-content/30" aria-hidden="true">·</span>
-                        <span class="tabular-nums" data-role="vote-count">{count_label(poll, counts)}</span>
-                        {#case closes_in(poll)}
-                          {#match nil}
-                          {#match label}
-                            <span class="text-base-content/30" aria-hidden="true">·</span>
-                            <span class={["tabular-nums", urgency_class(poll)]} data-role="closes-in">{label}</span>
-                        {/case}
-                      </div>
-                    </div>
-                  </article>
-              {/case}
-            {/for}
+          {!-- Carousel navigation arrows, shown in the header to the right of the title --}
+          <:action :if={length(polls) > 1}>
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                aria-label={l("Scroll left")}
+                class="w-7 h-7 rounded-full bg-primary text-primary-content flex items-center justify-center shrink-0 disabled:opacity-30 transition-opacity cursor-pointer"
+                phx-click={JS.dispatch("scroll-left", to: "#polls-closing-soon-carousel")}
+              >
+                <#Icon iconify="ph:caret-left" class="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                aria-label={l("Scroll right")}
+                class="w-7 h-7 rounded-full bg-primary text-primary-content flex items-center justify-center shrink-0 disabled:opacity-30 transition-opacity cursor-pointer"
+                phx-click={JS.dispatch("scroll-right", to: "#polls-closing-soon-carousel")}
+              >
+                <#Icon iconify="ph:caret-right" class="w-4 h-4" />
+              </button>
+            </div>
+          </:action>
+
+          <div class="grid grid-cols-1 overflow-hidden">
+            <div
+              id="polls-closing-soon-carousel"
+              class="flex items-start gap-3 overflow-x-auto touch-pan-y scroll-smooth snap-x snap-mandatory px-card pb-2"
+              phx-hook="CarouselScroll"
+              style="scrollbar-width: thin; scrollbar-color: oklch(var(--s)) oklch(var(--s) / 0.15);"
+            >
+              {#for poll <- polls}
+                {!-- `px-4` compensates for the preview's own `-mx-4` so its
+                     full-width status band aligns to the card edges. --}
+                <div
+                  class="flex-shrink-0 snap-start rounded-box border-hair border-secondary bg-base-100 overflow-hidden px-4 py-3"
+                  style="width: calc(85% - 8px);"
+                >
+                  <QuestionLive object={poll} vote_state={vote_state} />
+                </div>
+              {/for}
+            </div>
           </div>
         </Bonfire.UI.Common.WidgetBlockLive>
     {/case}

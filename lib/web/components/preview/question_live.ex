@@ -322,7 +322,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   names the process rather than calling everything a "poll". (The band's icon is
   the decision *state*, not the kind,  see `state_color_class/1`.)
   """
-  def process_kind("weighted_multiple"), do: l("Consent decision")
+  def process_kind("weighted_multiple"), do: l("Group decision")
   def process_kind("multiple"), do: l("Multiple choice")
   def process_kind(_), do: l("Poll")
 
@@ -367,8 +367,11 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   poll is just "open"). Shown both as the status-icon tooltip and as readable
   text next to the vote count.
   """
-  def state_label(:open, "weighted_multiple"), do: l("Gathering reactions")
+  def state_label(:open, "weighted_multiple"), do: l("Ongoing")
   def state_label(:open, _format), do: l("Open")
+  # Group (consent) decisions never declare a verdict — a closed one is just
+  # "Closed" and each group reads the reaction results itself.
+  def state_label(_state, "weighted_multiple"), do: l("Closed")
   def state_label(:decided, _format), do: l("Decided")
   def state_label(:no_consensus, _format), do: l("No consensus")
   def state_label(:no_agreement, _format), do: l("No agreement")
@@ -379,6 +382,16 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   def state_color_class(:decided), do: "text-success"
   def state_color_class(:no_consensus), do: "text-error"
   def state_color_class(_state), do: "text-muted"
+
+  @doc """
+  Text + border tone for the status-band *state pill* (and its dot, which is
+  `bg-current`), so the pill outline matches the state colour. Mirrors
+  `state_color_class/1` but adds the matching border token.
+  """
+  def state_tone_class(:open), do: "text-success border-success"
+  # Closed states carry no verdict colour — only the temporal open/closed
+  # distinction is signalled (success while open, neutral once closed).
+  def state_tone_class(_state), do: "text-muted border-base-content/25"
 
   @doc "Names of the choices whose ids are in `ids` (for carried / blocked summaries)."
   def choice_names(choices, ids) when is_list(choices) do

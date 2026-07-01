@@ -54,14 +54,17 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
 
   defp thread(conn, q), do: conn |> visit("/discussion/#{q.id}") |> wait_async()
 
-  test ":open consent shows 'Gathering reactions' and the voting UI", %{conn: conn, me: me} do
+  test ":open consent shows 'Ongoing' and the voting UI", %{conn: conn, me: me} do
     conn
     |> thread(open_consent(me))
-    |> assert_has("[data-role=poll-state-label]", text: "Gathering reactions")
+    |> assert_has("[data-role=poll-state-label]", text: "Ongoing")
     |> assert_has("[data-role=submit-vote]")
   end
 
-  test ":decided shows the Decided band, an Agreed option, and the Agreed outcome",
+  # Group (consent) decisions impose no verdict: a closed one reads a neutral
+  # "Closed" band and just the reaction results — no Agreed/Blocked/No-consensus
+  # label, no outcome panel. Each group interprets the results themselves.
+  test "broad agreement closes to a neutral 'Closed' band and results, no verdict",
        %{conn: conn, me: me} do
     q = open_consent(me)
     [alpha, _beta] = q.choices
@@ -70,24 +73,26 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
 
     conn
     |> thread(close!(q))
-    |> assert_has("[data-role=poll-state-label]", text: "Decided")
-    |> assert_has("[data-role=choice-carried]", text: "Agreed")
-    |> assert_has("[data-role=outcome]", text: "Agreed")
+    |> assert_has("[data-role=poll-state-label]", text: "Closed")
+    |> assert_has("[data-role=choice-participation]")
+    |> refute_has("[data-role=choice-carried]")
+    |> refute_has("[data-role=outcome]")
   end
 
-  test ":no_consensus when an option is blocked", %{conn: conn, me: me} do
+  test "a blocked option still shows no verdict — just 'Closed' + results",
+       %{conn: conn, me: me} do
     q = open_consent(me)
     [alpha, _beta] = q.choices
     react(q, alpha, "∞")
 
     conn
     |> thread(close!(q))
-    |> assert_has("[data-role=poll-state-label]", text: "No consensus")
-    |> assert_has("[data-role=choice-blocked]", text: "Blocked")
-    |> assert_has("[data-role=outcome]", text: "No consensus")
+    |> assert_has("[data-role=poll-state-label]", text: "Closed")
+    |> refute_has("[data-role=choice-blocked]")
+    |> refute_has("[data-role=outcome]")
   end
 
-  test ":no_agreement when reactions exist but none reached net agreement",
+  test "reactions with no clear agreement close to 'Closed' + results, no verdict",
        %{conn: conn, me: me} do
     q = open_consent(me)
     [alpha, _beta] = q.choices
@@ -95,8 +100,8 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
 
     conn
     |> thread(close!(q))
-    |> assert_has("[data-role=poll-state-label]", text: "No agreement")
-    |> assert_has("[data-role=outcome]", text: "No agreement")
+    |> assert_has("[data-role=poll-state-label]", text: "Closed")
+    |> refute_has("[data-role=outcome]")
   end
 
   test ":closed_empty when the poll closed with no votes", %{conn: conn, me: me} do

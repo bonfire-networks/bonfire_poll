@@ -153,7 +153,7 @@
                     class={[
                       "transition group-hover:opacity-90 group-aria-checked:opacity-100 group-aria-checked:scale-110 h-5 w-5",
                       if(i == "∞",
-                        do: "text-muted group-aria-checked:text-error",
+                        do: "text-base-content group-aria-checked:text-error",
                         else: score_color_class(i)
                       )
                     ]}

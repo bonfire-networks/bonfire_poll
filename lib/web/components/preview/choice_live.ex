@@ -83,7 +83,10 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   end
 
   def score_color_class(score) when is_number(score) and score > 0, do: "text-success"
-  def score_color_class(score) when is_number(score) and score < 0, do: "text-warning"
+  # Figma renders the two negatives in the red family, not amber: Concerned reads
+  # as the lighter pink (secondary), Disagree as full red (error).
+  def score_color_class(-1), do: "text-secondary"
+  def score_color_class(score) when is_number(score) and score < 0, do: "text-error"
   def score_color_class("∞"), do: "text-error"
   def score_color_class(_), do: "text-muted"
 
@@ -102,13 +105,13 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   ## Examples
 
       iex> Bonfire.Poll.Web.Preview.ChoiceLive.histogram_segment(%{1 => 10, 2 => 5}, 1)
-      {1, "Seems fine", "ph:smiley-duotone", "text-success", 10}
+      {1, "Seems fine", "ph:smiley-fill", "text-success", 10}
 
       iex> Bonfire.Poll.Web.Preview.ChoiceLive.histogram_segment(%{nil => 1, 2 => 4}, nil)
-      {"∞", "Block", "ph:prohibit-bold", "text-error", 1}
+      {"∞", "Block", "ph:prohibit-fill", "text-error", 1}
 
       iex> Bonfire.Poll.Web.Preview.ChoiceLive.histogram_segment(%{2 => 4}, -1)
-      {-1, "Concerned", "ph:smiley-meh-duotone", "text-warning", 0}
+      {-1, "Concerned", "ph:smiley-meh-fill", "text-secondary", 0}
   """
   def histogram_segment(histogram, weight) when is_map(histogram) do
     count = Map.get(histogram, weight, 0)
@@ -206,7 +209,7 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   ## Examples
 
       iex> Bonfire.Poll.Web.Preview.ChoiceLive.reaction_chips(%{2 => 3, nil => 1})
-      [{2, "Great", "ph:smiley-wink-duotone", "text-success", 3}, {"∞", "Block", "ph:prohibit-bold", "text-error", 1}]
+      [{2, "Great", "ph:smiley-wink-fill", "text-success", 3}, {"∞", "Block", "ph:prohibit-full", "text-error", 1}]
   """
   def reaction_chips(histogram) when is_map(histogram) do
     @chip_order

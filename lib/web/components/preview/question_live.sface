@@ -94,15 +94,6 @@
                 __unsafe__: !@is_remote
               )}
             </div>
-
-            <div :if={@showing_within != :smart_input} x-cloak x-show="expandable">
-              <button
-                type="button"
-                @click="expanded = !expanded"
-                x-text="expanded ? 'Read less' : 'Read more'"
-                class="link text-sm mt-2 font-semibold link-hover link-primary normal-case"
-              >{l("Read more")}</button>
-            </div>
         {/case}
       </div>
 
@@ -191,32 +182,39 @@
                   {#match kind_label}
                     <div
                       data-role="poll-status-band"
-                      class={[
-                        "flex flex-wrap items-center gap-x-2 gap-y-1 px-card py-content border-secondary border-b-hair text-body",
-                        "border-secondary": state in [:open, :closed, :closed_empty, :no_agreement]
-                      ]}
+                      class="flex flex-wrap items-center gap-0 gap-y-1.5 px-card py-content border-secondary border-b-hair text-body"
                     >
-                      {!-- format label (left); no leading icon — the status dot sits
-                           next to the state on the right, per the Figma poll artboard --}
-                      <span class="text-muted" data-role="poll-kind">{kind_label}</span>
+                      {!-- Kind + state as outline pills on the left (Figma): the
+                           kind names the process (primary outline), the state pill
+                           carries a `bg-current` dot in the state colour. --}
+                      <span
+                        class="inline-flex items-center rounded-full border-hair border-primary px-2.5 py-0.5 text-body font-normal uppercase tracking-wide text-primary"
+                        data-role="poll-kind"
+                      >{kind_label}</span>
 
-                      <div class="ml-auto inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-body text-muted tabular-nums">
-                        <span
-                          class={["font-medium inline-flex items-center gap-1.5 uppercase", state_color_class(state)]}
-                          data-role="poll-state-label"
-                        >
-                          <span class="h-2 w-2 rounded-full bg-current" aria-hidden="true" />
-                          {state_label(state, voting_format)}
-                        </span>
-                        {#if not locked}
-                          <span data-role="vote-count">{count_label(voting_format, total_votes)}</span>
-                        {/if}
+                      <span
+                        class={[
+                          "inline-flex items-center gap-1.5 rounded-full border-hair px-2.5 py-0.5 text-body font-normal uppercase tracking-wide",
+                          state_tone_class(state)
+                        ]}
+                        data-role="poll-state-label"
+                      >
+                        <span class="h-2 w-2 rounded-full bg-current" aria-hidden="true" />
+                        {state_label(state, voting_format)}
+                      </span>
+
+                      {!-- Meta on the right (Figma): time left, then reactions/votes
+                           count, in base-content — not muted. --}
+                      <div class="ml-auto inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-body text-base-content tabular-nums">
                         {#if state == :open}
                           {#case time_remaining_label}
                             {#match nil}
                             {#match tlabel}
                               <span data-role="time-remaining">{tlabel}</span>
                           {/case}
+                        {/if}
+                        {#if not locked}
+                          <span data-role="vote-count">{count_label(voting_format, total_votes)}</span>
                         {/if}
                         {#if @is_remote}
                           <span class="inline-flex items-center gap-1">
@@ -244,13 +242,13 @@
 
                 {!-- Thread-only: the process rules, made legible on demand. --}
                 {#if @viewing_main_object and voting_format == "weighted_multiple"}
-                  <details class="group/how border-b border-base-content/8" data-role="how-decided" x-on:click.stop>
+                  <details class="border-b-hair border-secondary bg-base-200" data-role="how-decided" x-on:click.stop>
                     <summary class="flex items-center gap-2 px-3 py-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm text-muted hover:text-base-content select-none">
                       <Iconify.iconify icon="ph:info-duotone" class="h-4 w-4 shrink-0 text-muted" />
-                      <span class="font-medium">{l("How this is decided")}</span>
+                      <span class="text-base-content font-medium">{l("How this is decided")}</span>
                       <Iconify.iconify
                         icon="ph:caret-down-bold"
-                        class="size-4 ml-auto text-base-content/50 transition-transform group-open/how:rotate-180 motion-reduce:transition-none"
+                        class="size-4 ml-auto text-primary transition-transform group-open/how:rotate-180 motion-reduce:transition-none"
                       />
                     </summary>
                     <div class="px-3 pb-3 text-sm text-muted leading-relaxed max-w-prose">
@@ -345,42 +343,12 @@
                   {/for}
                 </div>
 
-                {!-- Thread-only outcome panel: states *what was decided and why*,
-                 instead of leaving the reader to infer it from bars. --}
+                {!-- Thread-only closed caption. A poll that closed with no votes
+                     reads the same for everyone. Beyond that, only tally polls
+                     name a winner — group (consent) decisions show NO verdict;
+                     the group reads the reaction results itself. --}
                 {#if @viewing_main_object and closed}
                   {#case state}
-                    {#match :decided}
-                      <div
-                        class="flex items-start gap-2 px-3 py-2.5 border-t border-success/20 bg-success/[0.06] text-sm"
-                        data-role="outcome"
-                      >
-                        <Iconify.iconify icon="ph:seal-check-duotone" class="h-4 w-4 mt-0.5 shrink-0 text-success" />
-                        <div class="min-w-0">
-                          <span class="font-semibold text-success">{l("Agreed")}</span>
-                          {#case Enum.join(choice_names(choices, winning_ids), ", ")}
-                            {#match ""}
-                            {#match names}
-                              <span class="text-base-content">: {names}</span>
-                          {/case}
-                          <p class="text-muted mt-0.5">{l("Broad agreement, no blocks.")}</p>
-                        </div>
-                      </div>
-                    {#match :no_consensus}
-                      <div
-                        class="flex items-start gap-2 px-3 py-2.5 border-t border-error/20 bg-error/[0.06] text-sm"
-                        data-role="outcome"
-                      >
-                        <Iconify.iconify icon="ph:prohibit" class="h-4 w-4 mt-0.5 shrink-0 text-error" />
-                        <div class="min-w-0">
-                          <span class="font-semibold text-error">{l("No consensus reached")}</span>
-                          {#case Enum.join(choice_names(choices, vetoed_ids), ", ")}
-                            {#match ""}
-                            {#match names}
-                              <span class="text-base-content">: {names}</span>
-                          {/case}
-                          <p class="text-muted mt-0.5">{l("An objection blocked agreement. The group can keep talking and try again.")}</p>
-                        </div>
-                      </div>
                     {#match :closed_empty}
                       <div
                         class="flex items-center gap-2 px-3 py-2.5 border-t border-base-content/8 text-sm text-muted"
@@ -389,40 +357,29 @@
                         <Iconify.iconify icon="ph:lock-key" class="h-4 w-4 shrink-0" />
                         <span>{l("Closed with no votes.")}</span>
                       </div>
-                    {#match :no_agreement}
-                      <div
-                        class="flex items-start gap-2 px-3 py-2.5 border-t border-base-content/8 text-sm"
-                        data-role="outcome"
-                      >
-                        <Iconify.iconify icon="ph:scales-duotone" class="h-4 w-4 mt-0.5 shrink-0 text-muted" />
-                        <div class="min-w-0">
-                          <span class="font-semibold text-base-content">{l("No agreement reached")}</span>
-                          <p class="text-muted mt-0.5">{l(
-                              "People reacted, but no option had clear agreement. Nothing was blocked — the group can refine an option and try again."
-                            )}</p>
-                        </div>
-                      </div>
                     {#match _}
-                      {!-- Tally winner: a single slim caption, not a filled panel.
-                       The accented leading bar already carries the win; this
-                       just names it and its share. Plural-aware for ties. --}
-                      {#case Enum.join(choice_names(choices, winning_ids), ", ")}
-                        {#match ""}
-                        {#match names}
-                          <div
-                            class="flex items-center gap-1.5 px-3 py-2 border-t border-base-content/8 text-sm"
-                            data-role="outcome"
-                          >
-                            <Iconify.iconify icon="ph:sparkle-duotone" class="h-4 w-4 shrink-0 text-primary/80" />
-                            <span class="text-muted">{if length(winning_ids) > 1, do: l("Tied"), else: l("Top pick")}:</span>
-                            <span class="font-semibold text-base-content truncate">{names}</span>
-                            {#case winning_percent(voting_format, counts_by_choice_id, winning_ids, total_votes, voter_count)}
-                              {#match 0}
-                              {#match pct}
-                                <span class="ml-auto shrink-0 tabular-nums text-muted">{pct}%</span>
-                            {/case}
-                          </div>
-                      {/case}
+                      {#if voting_format != "weighted_multiple"}
+                        {!-- Tally winner: a single slim caption, not a filled panel.
+                         The accented leading bar already carries the win; this
+                         just names it and its share. Plural-aware for ties. --}
+                        {#case Enum.join(choice_names(choices, winning_ids), ", ")}
+                          {#match ""}
+                          {#match names}
+                            <div
+                              class="flex items-center gap-1.5 px-3 py-2 border-t border-base-content/8 text-sm"
+                              data-role="outcome"
+                            >
+                              <Iconify.iconify icon="ph:sparkle-duotone" class="h-4 w-4 shrink-0 text-primary/80" />
+                              <span class="text-muted">{if length(winning_ids) > 1, do: l("Tied"), else: l("Top pick")}:</span>
+                              <span class="font-semibold text-base-content truncate">{names}</span>
+                              {#case winning_percent(voting_format, counts_by_choice_id, winning_ids, total_votes, voter_count)}
+                                {#match 0}
+                                {#match pct}
+                                  <span class="ml-auto shrink-0 tabular-nums text-muted">{pct}%</span>
+                              {/case}
+                            </div>
+                        {/case}
+                      {/if}
                   {/case}
                 {/if}
 

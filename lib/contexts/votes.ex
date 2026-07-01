@@ -24,14 +24,14 @@ defmodule Bonfire.Poll.Votes do
 
   def scores,
     do: [
-      {"∞", "Block", "ph:prohibit-bold",
+      {"∞", "Block", "ph:prohibit-fill",
        "I need to express a veto, because this would harm a person or group, or it goes against our shared values or goals"},
-      {-2, "Disagree", "ph:smiley-sad-duotone", "I am strongly opposed"},
-      {-1, "Concerned", "ph:smiley-meh-duotone",
+      {-2, "Disagree", "ph:smiley-sad-fill", "I am strongly opposed"},
+      {-1, "Concerned", "ph:smiley-meh-fill",
        "I think this may be a mistake, or I have a different opinion"},
-      {0, "Neutral", "ph:smiley-blank-duotone", "Not relevant to me, I don't have an opinion"},
-      {1, "Seems fine", "ph:smiley-duotone", "I'm OK to try this for now"},
-      {2, "Great", "ph:smiley-wink-duotone",
+      {0, "Neutral", "ph:smiley-blank-fill", "Not relevant to me, I don't have an opinion"},
+      {1, "Seems fine", "ph:smiley-fill", "I'm OK to try this for now"},
+      {2, "Great", "ph:smiley-wink-fill",
        "This meets my needs and aligns with my values and goals"}
     ]
 
