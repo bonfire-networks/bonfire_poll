@@ -20,7 +20,7 @@
                viewer's own reaction, and how many people weighed in. --}
           <div
             data-role="consent-result"
-            class={"relative rounded-lg px-3 py-2.5 motion-safe:transition-colors"}
+            class="relative rounded-lg px-3 py-2.5 motion-safe:transition-colors"
           >
             {!-- Name + outcome state lead the row; the reaction detail sits
                  below, so it reads name-first instead of a floating chip on top. --}
@@ -214,10 +214,7 @@
                     />
 
                     {#if voted_on}
-                      <div
-                        class="mt-half inline-flex items-center gap-1 text-caption text-muted"
-                        data-role="your-vote"
-                      >
+                      <div class="mt-half inline-flex items-center gap-1 text-caption text-muted" data-role="your-vote">
                         <Iconify.iconify icon="ph:check-circle-fill" class="h-3 w-3 text-primary" />
                         <span>{l("Your vote")}</span>
                       </div>
@@ -232,7 +229,11 @@
                 </div>
 
                 {!-- share bar: sweeps 0→pct on mount; reduced-motion starts at target --}
-                <div class="mt-content h-2 rounded-full bg-base-200 overflow-hidden" role="img" aria-label={"#{pct}%"}>
+                <div
+                  class="mt-content h-2 rounded-full bg-base-200 overflow-hidden"
+                  role="img"
+                  aria-label={"#{pct}%"}
+                >
                   <div
                     aria-hidden="true"
                     x-data={"{ w: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? #{pct} : 0 }"}

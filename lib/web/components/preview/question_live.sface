@@ -123,7 +123,7 @@
               {/case}
             </div>
 
-            <div class="  divide-hair divide-secondary">
+            <div class="divide-hair divide-secondary">
               {#for {choice, idx} <- Enum.with_index(choices)}
                 <ChoiceLive
                   question={question_without_choices}
@@ -193,7 +193,8 @@
                       data-role="poll-status-band"
                       class={[
                         "flex flex-wrap items-center gap-x-2 gap-y-1 px-card py-content border-secondary border-b-hair text-body",
-                        "border-secondary": state in [:open, :closed, :closed_empty, :no_agreement]                      ]}
+                        "border-secondary": state in [:open, :closed, :closed_empty, :no_agreement]
+                      ]}
                     >
                       {!-- format label (left); no leading icon — the status dot sits
                            next to the state on the right, per the Figma poll artboard --}

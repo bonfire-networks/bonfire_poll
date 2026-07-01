@@ -8,7 +8,7 @@
           reset_cache_event="Bonfire.Poll.Web.WidgetPollsClosingSoonLive:reset_polls_closing_soon"
           reset_cache_values={%{limit: @limit}}
           class="w-full pt-4 flex-auto mx-auto border-y-hair border-secondary overflow-hidden"
-      title_class="flex items-center justify-between pb-card text-xs font-normal uppercase tracking-wide text-base-content px-card"
+          title_class="flex items-center justify-between pb-card text-xs font-normal uppercase tracking-wide text-base-content px-card"
           empty={polls == []}
           empty_icon="ph:list-checks-duotone"
           empty_message={l("No open polls yet. Why not start one and get people voting?")}
