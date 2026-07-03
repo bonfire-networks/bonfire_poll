@@ -171,10 +171,11 @@
             selected={false}
             compact={@compact}
             inline
+            id_prefix={@id_prefix}
           />
         </div>
       {#elseif @vote and not voted_on}
-        <div class="rounded-lg overflow-hidden motion-safe:transition-colors">
+        <div class="overflow-hidden motion-safe:transition-colors">
           <VotingLive
             voting_format={@voting_format}
             question={@question}
@@ -182,6 +183,7 @@
             index={@index}
             selected={false}
             compact={@compact}
+            id_prefix={@id_prefix}
           >
             <ChoiceContentLive
               question={@question}

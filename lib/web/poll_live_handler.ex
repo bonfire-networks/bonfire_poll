@@ -97,7 +97,7 @@ defmodule Bonfire.Poll.LiveHandler do
         |> Bonfire.UI.Common.SmartInput.LiveHandler.reset_input()
         |> assign_flash(
           :info,
-          "<span>#{l("Posted!")}</span> <a href='#{permalink}' target='_top' class='ml-2 link link-hover font-semibold text-primary'>#{l("Show")} →</a>"
+          "<span>#{l("Posted!")}</span> <a href='#{permalink}' target='_top' class='ml-2 link link-hover font-medium text-primary'>#{l("Show")} →</a>"
         )
       }
     else

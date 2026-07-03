@@ -217,7 +217,8 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     # Regression: vote-input / vote-btn / vote-weight ids used to be keyed
     # by the per-poll choice index. Two polls in the feed would then both
     # emit `vote-input-0`, `vote-input-1`, … and the browser console
-    # would spew "Multiple IDs detected". Scoping by choice ULID fixes it.
+    # would spew "Multiple IDs detected". Scoping by render context and choice
+    # ULID fixes it, including when the same poll appears in two widgets.
     account = Fake.fake_account!()
     user = Fake.fake_user!(account)
     conn = conn(user: user, account: account)
@@ -244,20 +245,23 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
         boundary: "public"
       )
 
-    # Each choice has its own ULID; ids must include those, not the index.
+    # Each choice has its own ULID; ids must include those, plus the rendering
+    # scope, not just the index or naked choice id.
     [c1a, c1b] = q1.choices |> Enum.sort_by(& &1.id)
     [c2a, c2b] = q2.choices |> Enum.sort_by(& &1.id)
 
     conn
     |> visit("/feed")
     |> wait_async()
-    |> assert_has_or_open_browser(~s|#vote-input-#{c1a.id}|)
-    |> assert_has_or_open_browser(~s|#vote-input-#{c1b.id}|)
-    |> assert_has_or_open_browser(~s|#vote-input-#{c2a.id}|)
-    |> assert_has_or_open_browser(~s|#vote-input-#{c2b.id}|)
+    |> assert_has_or_open_browser(~s|[id^='vote-input-'][id$='-#{c1a.id}']|)
+    |> assert_has_or_open_browser(~s|[id^='vote-input-'][id$='-#{c1b.id}']|)
+    |> assert_has_or_open_browser(~s|[id^='vote-input-'][id$='-#{c2a.id}']|)
+    |> assert_has_or_open_browser(~s|[id^='vote-input-'][id$='-#{c2b.id}']|)
     # And the legacy `vote-input-0` collision is gone.
     |> refute_has("#vote-input-0")
     |> refute_has("#vote-input-1")
+    |> refute_has("#vote-input-#{c1a.id}")
+    |> refute_has("#vote-input-#{c2a.id}")
   end
 
   test "once the proposal phase ends, the voting UI takes over" do

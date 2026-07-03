@@ -15,6 +15,7 @@ defmodule Bonfire.Poll.VotingLive do
   # parent can place the strip on the same row as the choice content.
   prop inline, :boolean, default: false
   prop index, :integer, default: 0
+  prop id_prefix, :string, default: nil
 
   slot default
 
@@ -32,6 +33,15 @@ defmodule Bonfire.Poll.VotingLive do
   def score_key("∞"), do: "veto"
 
   @doc "phx-click chain that records the chosen weight + flips aria-checked on its siblings."
+  def choose_weight_js(prefix, choice_id, score) do
+    choose_weight_js(
+      vote_dom_id(prefix, "vote-input", choice_id),
+      vote_dom_id(prefix, "vote-btn", choice_id, score_key(score)),
+      vote_dom_id(prefix, "vote-weight", choice_id),
+      score
+    )
+  end
+
   def choose_weight_js(fieldset_id, button_id, hidden_id, score) do
     JS.set_attribute({"aria-checked", "false"}, to: "##{fieldset_id} button[role='radio']")
     |> JS.set_attribute({"aria-checked", "true"}, to: "##{button_id}")
@@ -41,6 +51,13 @@ defmodule Bonfire.Poll.VotingLive do
   def chosen_value(false), do: ""
   def chosen_value(nil), do: ""
   def chosen_value(value), do: to_string(value)
+
+  @doc "Builds a scoped DOM id for poll voting controls."
+  def vote_dom_id(prefix, kind, choice_id, suffix \\ nil) do
+    [kind, prefix, choice_id, suffix]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("-")
+  end
 
   @doc """
   Roving-tabindex pattern for a `role=radiogroup`: the selected button is

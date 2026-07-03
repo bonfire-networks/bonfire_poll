@@ -14,6 +14,7 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   prop is_remote, :boolean, default: false
   prop hide_actions, :boolean, default: false
   prop activity_inception, :boolean, default: false
+  prop id_prefix, :string, default: nil
 
   prop vote, :boolean, default: false
   prop vote_count, :integer, default: 0

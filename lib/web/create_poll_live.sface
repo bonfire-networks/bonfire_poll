@@ -51,7 +51,7 @@
         <Inputs for={:post_content}>
           <Field name={:html_body}>
             <div class="flex flex-col gap-1.5">
-              <label for="poll_question" class="text-sm font-semibold text-base-content">
+              <label for="poll_question" class="text-sm font-medium text-base-content">
                 {l("Your question")}
               </label>
               {!-- phx-update=ignore preserves the typed value across morphdom passes. --}
@@ -67,7 +67,7 @@
         </Inputs>
 
         <section aria-labelledby="poll_options_heading" class="flex flex-col gap-1.5">
-          <h3 id="poll_options_heading" class="text-sm font-semibold text-base-content">
+          <h3 id="poll_options_heading" class="text-sm font-medium text-base-content">
             {l("Options")}
           </h3>
           <div class="flex flex-col gap-2">

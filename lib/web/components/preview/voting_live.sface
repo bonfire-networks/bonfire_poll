@@ -9,7 +9,7 @@
     {#case id(@choice) || @index}
       {#match choice_id}
         <fieldset
-          id={"vote-input-#{choice_id}"}
+          id={vote_dom_id(@id_prefix, "vote-input", choice_id)}
           role="radiogroup"
           phx-update="ignore"
           x-data="{
@@ -69,7 +69,7 @@
           <legend class="sr-only">{l("Your reaction to this choice")}</legend>
           <input
             type="hidden"
-            id={"vote-weight-#{choice_id}"}
+            id={vote_dom_id(@id_prefix, "vote-weight", choice_id)}
             name={"votes[#{@index}][weight]"}
             value={chosen_value(@selected)}
           />
@@ -126,16 +126,11 @@
                 <button
                   type="button"
                   role="radio"
-                  id={"vote-btn-#{choice_id}-#{score_key(i)}"}
+                  id={vote_dom_id(@id_prefix, "vote-btn", choice_id, score_key(i))}
                   aria-checked={if i == @selected, do: "true", else: "false"}
                   aria-label={"#{name}: #{description}"}
                   tabindex={roving_tabindex(i, @selected)}
-                  phx-click={choose_weight_js(
-                    "vote-input-#{choice_id}",
-                    "vote-btn-#{choice_id}-#{score_key(i)}",
-                    "vote-weight-#{choice_id}",
-                    i
-                  )}
+                  phx-click={choose_weight_js(@id_prefix, choice_id, i)}
                   data-role="vote-score"
                   data-score={"#{i}"}
                   data-label={name}
@@ -165,10 +160,10 @@
         </fieldset>
     {/case}
   {#match "multiple"}
-    <div id={"vote-input-#{id(@choice) || "noid"}"} phx-update="ignore">
+    <div id={vote_dom_id(@id_prefix, "vote-input", id(@choice) || "noid")} phx-update="ignore">
       <label class={[
-        "flex items-center gap-3 cursor-pointer px-3 py-2.5 min-h-[44px] rounded-md transition",
-        "hover:bg-base-content/[0.04] focus-within:bg-base-content/[0.06]": !@readonly,
+        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-[44px] transition",
+        "hover:bg-primary/10": !@readonly,
         "cursor-default": @readonly
       ]}>
         <input
@@ -183,10 +178,10 @@
       </label>
     </div>
   {#match "single"}
-    <div id={"vote-input-#{id(@choice) || "noid"}"} phx-update="ignore">
+    <div id={vote_dom_id(@id_prefix, "vote-input", id(@choice) || "noid")} phx-update="ignore">
       <label class={[
-        "flex items-center gap-3 cursor-pointer px-3 py-2.5 min-h-[44px] rounded-md transition",
-        "hover:bg-base-content/[0.04] focus-within:bg-base-content/[0.06]": !@readonly,
+        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-[44px] transition",
+        "hover:bg-primary/10": !@readonly,
         "cursor-default": @readonly
       ]}>
         <input

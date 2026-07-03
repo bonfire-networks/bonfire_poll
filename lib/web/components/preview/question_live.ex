@@ -15,6 +15,30 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   prop thread_title, :any, default: nil
   prop hide_actions, :boolean, default: false
   prop activity_inception, :boolean, default: false
+  prop permalink, :string, default: nil
+
+  defp vote_page_path(permalink, question) do
+    usable_path(permalink) || maybe_path(question) || "/login"
+  end
+
+  defp usable_path(path) when is_binary(path) do
+    path = String.trim(path)
+
+    if path != "" and path != "#" and String.starts_with?(path, ["/", "http://", "https://"]) do
+      String.trim_trailing(path, "#")
+    end
+  end
+
+  defp usable_path(_), do: nil
+
+  defp maybe_path(nil), do: nil
+  defp maybe_path(object), do: path(object)
+
+  # true when rendering inside an embed iframe, where guests can't use the in-app
+  # login flow so the CTA opens the poll's page on the instance in a new tab instead
+  defp embed_cta?(:thread_embed, _context), do: true
+  defp embed_cta?(:pinned, context), do: e(context, :link_target, nil) == "_blank"
+  defp embed_cta?(_, _), do: false
 
   def preloads(),
     do: [
