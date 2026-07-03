@@ -46,7 +46,7 @@
                 {!-- `px-4` compensates for the preview's own `-mx-4` so its
                      full-width status band aligns to the card edges. --}
                 <div
-                  class="flex-shrink-0 snap-start rounded-box border-hair border-secondary bg-base-100 overflow-hidden px-4 py-3"
+                  class="flex-shrink-0 snap-start rounded-box border-hair border-secondary bg-base-100 overflow-hidden px-4 py-3 pb-0"
                   style="width: calc(85% - 8px);"
                 >
                   <QuestionLive object={poll} vote_state={vote_state} />
