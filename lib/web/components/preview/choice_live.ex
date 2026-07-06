@@ -210,7 +210,7 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
   ## Examples
 
       iex> Bonfire.Poll.Web.Preview.ChoiceLive.reaction_chips(%{2 => 3, nil => 1})
-      [{2, "Great", "ph:smiley-wink-fill", "text-success", 3}, {"∞", "Block", "ph:prohibit-full", "text-error", 1}]
+      [{2, "Great", "ph:smiley-wink-fill", "text-success", 3}, {"∞", "Block", "ph:prohibit-fill", "text-error", 1}]
   """
   def reaction_chips(histogram) when is_map(histogram) do
     @chip_order

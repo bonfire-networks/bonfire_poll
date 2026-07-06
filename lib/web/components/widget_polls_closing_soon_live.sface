@@ -14,7 +14,7 @@
           empty_message={l("No open polls yet. Why not start one and get people voting?")}
         >
           {!-- Carousel navigation arrows, shown in the header to the right of the title --}
-          <:action :if={length(polls) > 1}>
+          <:action :if={length(polls) > 1 && socket_connected?(@__context__)}>
             <div class="flex items-center gap-1.5">
               <button
                 type="button"

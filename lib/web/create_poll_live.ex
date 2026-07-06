@@ -59,10 +59,35 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
 
     socket =
       socket
-      |> assign(Map.drop(assigns, [:uploads]) |> assigns_clean())
+      |> assign(
+        Map.drop(assigns, [:uploads])
+        |> assigns_clean()
+        |> preserve_composer_status(socket)
+      )
       |> maybe_merge_tuning(merge_tuning)
 
     {:ok, socket}
+  end
+
+  # `input_status` (the submit-button state) is set by validate on THIS component,
+  # while parent re-renders re-send their own stale `smart_input_opts` copy as a
+  # prop. Only maps that explicitly carry `:input_status` (validate results,
+  # composer resets) apply as-is — others inherit the current opts' missing keys,
+  # so poll controls (duration, add-option, toggles) can't disable a live draft.
+  defp preserve_composer_status(assigns, socket) do
+    current = assigns(socket)[:smart_input_opts]
+
+    Enum.map(assigns, fn
+      {:smart_input_opts, incoming} = entry when is_map(incoming) ->
+        if is_map(current) and not Map.has_key?(incoming, :input_status) do
+          {:smart_input_opts, Map.merge(current, incoming)}
+        else
+          entry
+        end
+
+      other ->
+        other
+    end)
   end
 
   defp maybe_merge_tuning(socket, nil), do: socket
