@@ -174,7 +174,10 @@ defmodule Bonfire.Poll.Votes do
   def count(%{} = user, object) when is_struct(object) or is_binary(object),
     do: Edges.count_for_subject(__MODULE__, user, object, skip_boundary_check: true)
 
-  def count(%{} = object, _), do: Edges.count(:vote, object, skip_boundary_check: true)
+  # total votes cast for a single object (e.g. a poll Choice) — counted via the vote-edge query
+  # (like `for_choice`/`counts_for_questions`), NOT a `vote_count` mixin preload: Choice is a
+  # Needle.Virtual with no such denormalised mixin (only like/boost/etc have count mixins)
+  def count(%{} = object, _), do: count([object: object], skip_boundary_check: true)
 
   @doc """
   Total vote count per question, as a single grouped SQL query.

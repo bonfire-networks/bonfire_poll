@@ -402,7 +402,9 @@ defmodule Bonfire.Poll.Questions do
   - question: poll question struct
   """
   def ap_publish_activity(subject, verb, question) do
-    {:ok, actor} = ActivityPub.Actor.get_cached(pointer: subject)
+    {:ok, actor} =
+      ActivityPub.Actor.get_cached(pointer: subject)
+      |> repo().maybe_preload([:shared_user, character: [:peered]], prune: true)
 
     # Preload choices and votes
     question =
