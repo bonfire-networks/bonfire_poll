@@ -15,7 +15,7 @@ defmodule Bonfire.Poll.VoteFeedVisibilityTest do
   @vote_verb_id "7V0TEMEANSC0NSENT0RREFVSA1"
 
   setup do
-    Process.put(:feed_live_update_many_preload_mode, :inline)
+    Process.put([:bonfire, :feed_live_update_many_preload_mode], :inline)
     :ok
   end
 
