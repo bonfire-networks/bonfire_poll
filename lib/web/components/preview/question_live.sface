@@ -394,7 +394,7 @@
                     {/if}
 
                     {#if not closed}
-                      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 bg-base-content/[0.02]">
+                      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
                         {#if is_nil(current_user_id(@__context__))}
                           <a
                             href={if embed_cta?(@showing_within, @__context__),
