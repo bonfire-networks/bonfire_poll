@@ -28,7 +28,9 @@ defmodule Bonfire.Poll.Questions do
   def create(options \\ []) do
     # TODO: sanitise HTML to a certain extent depending on is_admin and/or boundaries
 
-    with {:ok, question} <- run_epic(:create, options ++ [do_not_strip_html: true]) do
+    # a poll's options are its primary content, so (like Mastodon) don't require a body
+    with {:ok, question} <-
+           run_epic(:create, options ++ [do_not_strip_html: true, content_optional: true]) do
       # #  TODO: add in an Epic instead?
       # Choices.simple_create_and_put(options[:question_attrs][:choices] || [], question, options)
       # |> debug("choices added")
@@ -387,10 +389,25 @@ defmodule Bonfire.Poll.Questions do
   end
 
   def get_by_uri(uri, opts \\ []) do
-    # WIP: Find question by canonical URL
-    Bonfire.Federate.ActivityPub.Peered.get_by_uri(uri)
-    ~> Enums.id()
-    ~> read(opts)
+    case pointer_id_by_uri(uri) do
+      nil -> {:error, :not_found}
+      id -> read(id, opts)
+    end
+  end
+
+  # Resolves a question's canonical URL to its local pointer ID, without fetching: remote questions have a `Peered` record, but local ones do NOT (Peered only records remote URIs) so for those, look up the cached AP object's pointer, or extract the pointer ULID embedded in the local canonical URL.
+  defp pointer_id_by_uri(uri) do
+    case Bonfire.Federate.ActivityPub.Peered.get_by_uri(uri) do
+      {:ok, %{id: id}} -> id
+      _ -> pointer_id_by_ap_object(uri)
+    end
+  end
+
+  defp pointer_id_by_ap_object(uri) do
+    case ActivityPub.Object.get_cached(ap_id: uri) do
+      {:ok, %{pointer_id: id}} when is_binary(id) -> id
+      _ -> Bonfire.Federate.ActivityPub.AdapterUtils.pointer_id_from_url(uri)
+    end
   end
 
   @doc """
@@ -416,18 +433,15 @@ defmodule Bonfire.Poll.Questions do
     # Determine voting format and options key
     options_key = options_key_for_voting_format(question.voting_format)
 
+    # one grouped query for all choices' tallies (was an N+1 `Votes.for_choice` per choice)
+    vote_counts = Votes.counts_for_choices([id(question)])
+
     # Build choices array
     options =
       Enum.map(choices, fn choice ->
         name = e(choice, :post_content, :name, nil)
         summary = e(choice, :post_content, :summary, nil)
         content = e(choice, :post_content, :html_body, nil)
-
-        #  TODO: avoid n+1
-        vote_count =
-          Votes.for_choice(choice, current_user: subject)
-          |> List.wrap()
-          |> length()
 
         %{
           "type" => "Note",
@@ -436,7 +450,7 @@ defmodule Bonfire.Poll.Questions do
           "content" => if(name || summary, do: content),
           "replies" => %{
             "type" => "Collection",
-            "totalItems" => vote_count
+            "totalItems" => Map.get(vote_counts, id(choice), 0)
           }
         }
       end)

@@ -20,9 +20,62 @@ defmodule Bonfire.Poll.VotesTest do
       assert {:ok, _} =
                Bonfire.Poll.Votes.vote(other_user, question, [%{choice_id: choice.id, weight: 1}])
 
-      votes = Bonfire.Poll.Votes.list([object: choice], [])
-      #  FIXME
-      assert length(votes) >= 1
+      votes = Bonfire.Poll.Votes.list([objects: choice], [])
+      assert length(votes) == 1
+    end
+
+    test "counts and listings are scoped per choice/voter, not instance-global" do
+      # regression: `count`/`for_choice`/`by_voter` passed SINGULAR `:object`/`:subject` filter
+      # keys, which `Edges.query_parent` doesn't recognise → they silently returned ALL vote
+      # edges on the instance. Needs 2 polls + 2 voters in one test so scoped ≠ global.
+      owner1 = fake_user!()
+      owner2 = fake_user!()
+      voter1 = fake_user!()
+      voter2 = fake_user!()
+
+      {:ok, poll1} =
+        fake_question_with_choices(
+          %{voting_format: "multiple", voting_dates: [DateTime.utc_now()]},
+          [%{name: "A"}, %{name: "B"}],
+          current_user: owner1
+        )
+
+      {:ok, poll2} =
+        fake_question_with_choices(
+          %{voting_format: "multiple", voting_dates: [DateTime.utc_now()]},
+          [%{name: "C"}, %{name: "D"}],
+          current_user: owner2
+        )
+
+      [a, b] = poll1.choices
+      [c, d] = poll2.choices
+
+      assert {:ok, _} = Votes.vote(voter1, poll1, [%{choice_id: a.id, weight: 1}])
+
+      assert {:ok, _} =
+               Votes.vote(voter2, poll1, [
+                 %{choice_id: a.id, weight: 1},
+                 %{choice_id: b.id, weight: 1}
+               ])
+
+      assert {:ok, _} = Votes.vote(voter1, poll2, [%{choice_id: c.id, weight: 1}])
+
+      # per-choice counts (the poll's owner can always see results)
+      assert Votes.calculate_if_visible(a, poll1, current_user: owner1) == 2
+      assert Votes.calculate_if_visible(b, poll1, current_user: owner1) == 1
+      assert Votes.calculate_if_visible(c, poll2, current_user: owner2) == 1
+      assert Votes.calculate_if_visible(d, poll2, current_user: owner2) == 0
+
+      # per-choice listings
+      assert length(Votes.for_choice(a)) == 2
+      assert length(Votes.for_choice(b)) == 1
+      assert Votes.for_choice(d) == []
+
+      # per-voter listings: each vote/4 call also records one question-level Vote edge
+      # (the activity), so voter1 = 2 choice votes + 2 question votes across the two polls
+      assert length(Votes.by_voter(voter1)) == 4
+      # voter2 = 2 choice votes + 1 question vote
+      assert length(Votes.by_voter(voter2)) == 3
     end
 
     test "cannot vote if voting period is not open" do
@@ -111,8 +164,8 @@ defmodule Bonfire.Poll.VotesTest do
                )
 
       votes = Votes.by_voter(user)
-      # FIXME
-      assert length(votes) >= 2
+      # 2 choice votes + 1 question-level Vote edge (the activity)
+      assert length(votes) == 3
     end
 
     test "results_visible?/3 returns true only if poll is closed or user can edit" do

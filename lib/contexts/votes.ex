@@ -3,7 +3,7 @@ defmodule Bonfire.Poll.Votes do
   use Bonfire.Common.Repo
   use Arrows
   import ActivityPub.Config, only: [is_in: 2]
-  alias Bonfire.Poll.{Questions, Question, Vote}
+  alias Bonfire.Poll.{Choices, Questions, Question, Vote}
   alias Ecto.Changeset
   alias Bonfire.Social.Edges
   alias Bonfire.Social.Objects
@@ -59,7 +59,9 @@ defmodule Bonfire.Poll.Votes do
     opts = to_options(opts)
 
     opts
-    |> Keyword.put(:subject, subject)
+    # NOTE: `Edges.query_parent` filters use the PLURAL keys (`:subjects`/`:objects`);
+    # a singular key falls through to "Filter params not recognised" and returns ALL votes
+    |> Keyword.put(:subjects, subject)
     |> query(
       opts
       |> Keyword.put_new(:current_user, subject)
@@ -72,7 +74,7 @@ defmodule Bonfire.Poll.Votes do
     opts = to_options(opts)
 
     opts
-    |> Keyword.put(:object, choice)
+    |> Keyword.put(:objects, choice)
     |> query(
       opts
       |> Keyword.put_new(:skip_boundary_check, true)
@@ -177,7 +179,7 @@ defmodule Bonfire.Poll.Votes do
   # total votes cast for a single object (e.g. a poll Choice) — counted via the vote-edge query
   # (like `for_choice`/`counts_for_questions`), NOT a `vote_count` mixin preload: Choice is a
   # Needle.Virtual with no such denormalised mixin (only like/boost/etc have count mixins)
-  def count(%{} = object, _), do: count([object: object], skip_boundary_check: true)
+  def count(%{} = object, _), do: count([objects: object], skip_boundary_check: true)
 
   @doc """
   Total vote count per question, as a single grouped SQL query.
@@ -198,6 +200,23 @@ defmodule Bonfire.Poll.Votes do
   end
 
   def counts_for_questions(_), do: %{}
+
+  @doc """
+  Vote counts per CHOICE across the given question(s), as `%{choice_id => count}`, in ONE grouped query (avoids N+1 when formatting a poll's per-choice tallies, e.g. for outgoing AP federation).
+  Same Ranked→Edge→Vote join as `counts_for_questions/1` but grouped by the choice (`ranked.item_id`).
+  """
+  def counts_for_choices([]), do: %{}
+
+  def counts_for_choices(question_ids) when is_list(question_ids) do
+    question_ids
+    |> questions_votes_query()
+    |> group_by([ranked: r], r.item_id)
+    |> select([ranked: r, vote: v], {r.item_id, count(v.id)})
+    |> repo().all()
+    |> Map.new()
+  end
+
+  def counts_for_choices(_), do: %{}
 
   @doc """
   The subset of `question_ids` the `voter` has cast any vote on, as a `MapSet`.
@@ -548,14 +567,10 @@ defmodule Bonfire.Poll.Votes do
 
     case do_create_vote_activity(voter, question, opts) do
       {:ok, vote_activity} ->
-        vote_activity =
-          vote_activity
-          |> Map.put(:votes, registered_votes)
-
-        # TODO: federate?
-        # Social.maybe_federate_and_gift_wrap_activity(voter, vote_activity)
-
-        {:ok, vote_activity}
+        vote_activity
+        |> Map.put(:votes, registered_votes)
+        # federate the vote (see `ap_publish_activity/3`); no-op for remote voters
+        |> then(&Bonfire.Social.maybe_federate_and_gift_wrap_activity(voter, &1))
 
       {:error, e} ->
         case get(voter, question) do
@@ -671,6 +686,83 @@ defmodule Bonfire.Poll.Votes do
     end)
   end
 
+  @doc """
+  Prepares outgoing federation for a vote: one `Create` of an `Answer` per chosen option: the object's `name` is the option's text, `inReplyTo` is the Question, and it is addressed only to the poll's author (not public). Our `Answer` type is rewritten to `Note` on the wire by `ActivityPub.Federator.Transformer.prepare_outgoing/1`, per Mastodon semantics.
+
+  Called by the federation dispatcher with the question-level `Vote` edge (voter→question); the per-choice Vote edges are (re)queried here since the worker reloads the vote by id.
+  """
+  def ap_publish_activity(subject, _verb, vote) do
+    vote = repo().maybe_preload(vote, :edge)
+    voter_id = id(subject) || e(vote, :edge, :subject_id, nil)
+    question_id = e(vote, :edge, :object_id, nil)
+
+    with {:ok, actor} <- ActivityPub.Actor.get_cached(pointer: voter_id),
+         {:ok, question_ap} <- ActivityPub.Object.get_cached(pointer: question_id) do
+      question_ap_id = question_ap.data["id"]
+
+      # the poll author's AP id, straight from the question's AP object (works for remote and local polls)
+      to =
+        ActivityPub.Object.actor_id_from_data(question_ap.data)
+        |> List.wrap()
+
+      case voted_choices(voter_id, question_id) do
+        [] ->
+          error(vote, "No voted choices found to federate")
+
+        choice_votes ->
+          # one Create per chosen option (each `ActivityPub.create` publishes itself);
+          # return the last one to satisfy the single-activity dispatcher contract
+          Enum.reduce_while(choice_votes, nil, fn {choice_vote_id, name}, _acc ->
+            case ActivityPub.create(%{
+                   pointer: choice_vote_id,
+                   local: true,
+                   actor: actor,
+                   to: to,
+                   object: %{
+                     "type" => "Answer",
+                     "attributedTo" => actor.ap_id,
+                     "name" => name,
+                     "inReplyTo" => question_ap_id,
+                     "to" => to
+                   }
+                 }) do
+              {:ok, ap_activity} -> {:cont, {:ok, ap_activity}}
+              e -> {:halt, error(e, "Could not federate the vote for option: #{name}")}
+            end
+          end)
+      end
+    else
+      {:error, :not_found} ->
+        :ignore
+
+      e ->
+        error(e)
+    end
+  end
+
+  # the voter's per-choice Vote edges on a question, as `{choice_vote_id, option_name}` tuples
+  defp voted_choices(voter_id, question_id) do
+    choice_votes =
+      [question_id]
+      |> questions_votes_query()
+      |> where([edge: e], e.subject_id == ^voter_id)
+      |> select([ranked: r, vote: v], {v.id, r.item_id})
+      |> repo().all()
+
+    choice_names =
+      choice_votes
+      |> Enum.map(&elem(&1, 1))
+      |> Bonfire.Common.Needles.list!(skip_boundary_check: true)
+      |> repo().maybe_preload(:post_content)
+      |> Map.new(fn choice ->
+        {id(choice),
+         e(choice, :post_content, :name, nil) || e(choice, :post_content, :summary, nil) ||
+           e(choice, :post_content, :html_body, nil)}
+      end)
+
+    Enum.map(choice_votes, fn {vote_id, choice_id} -> {vote_id, choice_names[choice_id]} end)
+  end
+
   # For incoming votes (Create activities with Note objects)
   def ap_receive_activity(
         creator,
@@ -688,8 +780,8 @@ defmodule Bonfire.Poll.Votes do
     with {:ok, question} <-
            Questions.get_by_uri(question_uri, current_user: creator, verbs: [:vote]),
          {:ok, choice} <- Choices.find_choice_by_name(question, option_name) do
-      # Record vote
-      vote(creator, question, choice, [])
+      # Record vote (`vote/4` takes a list of `%{choice_id: _}` maps)
+      vote(creator, question, [%{choice_id: id(choice)}], [])
     else
       e ->
         warn(
