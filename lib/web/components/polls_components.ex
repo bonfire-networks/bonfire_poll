@@ -23,7 +23,7 @@ defmodule Bonfire.Poll.EditProposalLive do
           name={"choices[#{@index}][name]"}
           type="text"
           placeholder={l("Option %{n}", n: @index + 1)}
-          class="block w-full rounded-md border border-base-content/20 bg-base-100 px-3 py-2.5 text-sm text-base-content placeholder:text-base-content/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
+          class="block w-full rounded-md border border-secondary bg-base-100 px-3 py-2.5 text-sm text-base-content placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
         />
       </div>
       <button

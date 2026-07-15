@@ -59,7 +59,7 @@
                 <TextInput
                   id="poll_question"
                   opts={placeholder: l("What are we deciding?")}
-                  class="block w-full rounded-md border border-base-content/20 bg-base-100 px-3 py-2.5 text-base text-base-content placeholder:text-base-content/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
+                  class="block w-full rounded-md border border-secondary bg-base-100 px-3 py-2.5 text-base text-base-content placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
                 />
               </div>
             </div>
@@ -86,7 +86,7 @@
             phx-click="Bonfire.Poll:add_option"
             phx-value-current={@visible_option_count}
             phx-target="#smart_input"
-            class="self-start inline-flex items-center gap-2 rounded-md border border-base-content/20 bg-base-100 px-3 py-2 min-h-[44px] text-sm font-medium text-base-content hover:bg-base-content/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            class="self-start inline-flex items-center gap-2 rounded-md border border-secondary bg-base-100 px-3 py-2 min-h-[44px] text-sm font-medium text-base-content hover:bg-base-content/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
           >
             <#Icon iconify="ph:plus" class="h-4 w-4" />
             <span>{l("Add option")}</span>

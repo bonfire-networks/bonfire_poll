@@ -1,7 +1,7 @@
 <section
   aria-label={l("Poll settings")}
   data-role="poll-tuning-panel"
-  class="rounded-md border border-base-content/10 bg-base-100"
+  class="rounded-md border border-secondary bg-base-100"
 >
   <ul class="divide-base-content/8">
     {!-- Duration row. Single-phase by default; two-phase when proposal_phase is on. --}

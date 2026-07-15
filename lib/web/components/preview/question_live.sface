@@ -59,12 +59,12 @@
                   <button
                     x-on:click="content_open = ! content_open; $nextTick(() => { expandable = $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight });"
                     x-text={"content_open ? '#{l("Show less")}' : '#{l("Show more")}'"}
-                    class="show_more_toggle_action ml-1 normal-case !border !border-base-content/30 btn-outline btn btn-sm"
+                    class="show_more_toggle_action ml-1 normal-case !border !border-secondary btn-outline btn btn-sm"
                   >
                     {l("Show more")}
                   </button>
                 {#else}
-                  <div class="ml-1 normal-case !border !border-base-content/30 btn-outline btn btn-sm">
+                  <div class="ml-1 normal-case !border !border-secondary btn-outline btn btn-sm">
                     {l("Show more")}
                   </div>
                 {/if}
@@ -105,7 +105,7 @@
              would keep blocking voting after suggestions close. --}
             {#if proposal_open}
               <div class="mt-content">
-                <div class="flex items-center gap-2 px-3 py-2 border-b border-base-content/8 text-sm text-muted">
+                <div class="flex items-center gap-2 px-3 py-2 border-b border-secondary text-sm text-muted">
                   <Iconify.iconify icon="ph:lightbulb-duotone" class="size-4 shrink-0" />
                   <span class="font-medium text-base-content">{l("Proposal phase")}</span>
                   {#case proposal_end_label}
@@ -158,7 +158,7 @@
                       placeholder={l("Suggest an option")}
                       required
                       maxlength="200"
-                      class="flex-1 min-w-0 rounded-md border border-base-content/20 bg-base-100 px-3 py-2 text-sm text-base-content placeholder:text-base-content/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      class="flex-1 min-w-0 rounded-md border border-secondary bg-base-100 px-3 py-2 text-sm text-base-content placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
                     />
                     <button type="submit" data-role="propose-submit" class="btn btn-primary btn-sm">
                       {l("Suggest")}
@@ -361,7 +361,7 @@
                       {#case state}
                         {#match :closed_empty}
                           <div
-                            class="flex items-center gap-2 px-3 py-2.5 border-t border-base-content/8 text-sm text-muted"
+                            class="flex items-center gap-2 px-3 py-2.5 border-t border-secondary text-sm text-muted"
                             data-role="outcome"
                           >
                             <Iconify.iconify icon="ph:lock-key" class="h-4 w-4 shrink-0" />
@@ -376,7 +376,7 @@
                               {#match ""}
                               {#match names}
                                 <div
-                                  class="flex items-center gap-1.5 px-3 py-2 border-t border-base-content/8 text-sm"
+                                  class="flex items-center gap-1.5 px-3 py-2 border-t border-secondary text-sm"
                                   data-role="outcome"
                                 >
                                   <Iconify.iconify icon="ph:sparkle-duotone" class="h-4 w-4 shrink-0 text-primary/80" />
@@ -402,7 +402,7 @@
                               else: "/login"}
                             target={if embed_cta?(@showing_within, @__context__), do: "_blank"}
                             rel={if embed_cta?(@showing_within, @__context__), do: "noopener"}
-                            class="btn btn-sm btn-ghost border border-base-content/20"
+                            class="btn btn-sm btn-ghost border border-secondary"
                             data-role="sign-in-to-vote"
                           >
                             {l("Sign in to vote")}

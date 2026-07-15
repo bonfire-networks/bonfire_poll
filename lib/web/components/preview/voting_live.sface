@@ -61,8 +61,8 @@
           x-on:keydown.up.prevent="moveFocus(-1)"
           class={[
             "flex flex-col items-end gap-1",
-            "border-t border-base-content/10 px-3 py-1.5": @compact and !@inline,
-            "border-t border-base-content/10 px-3 py-2": !@compact and !@inline,
+            "border-t border-secondary px-3 py-1.5": @compact and !@inline,
+            "border-t border-secondary px-3 py-2": !@compact and !@inline,
             "shrink-0": @inline
           ]}
         >
