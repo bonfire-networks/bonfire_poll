@@ -7,31 +7,43 @@
           widget_title={@widget_title || l("Polls closing soon")}
           reset_cache_event="Bonfire.Poll.Web.WidgetPollsClosingSoonLive:reset_polls_closing_soon"
           reset_cache_values={%{limit: @limit}}
+          can_reset
           class="w-full pt-4 flex-auto mx-auto border-y-hair border-secondary overflow-hidden px-card"
           title_class="flex items-center justify-between pb-card text-xs font-normal uppercase tracking-wide text-base-content"
           empty={polls == []}
           empty_icon="ph:list-checks-duotone"
           empty_message={l("No open polls yet. Why not start one and get people voting?")}
         >
-          {!-- Carousel navigation arrows, shown in the header to the right of the title --}
-          <:action :if={length(polls) > 1 && socket_connected?(@__context__)}>
-            <div class="flex items-center gap-1.5">
-              <button
-                type="button"
-                aria-label={l("Scroll left")}
-                class="w-7 h-7 rounded-full bg-primary text-primary-content flex items-center justify-center shrink-0 disabled:opacity-30 transition-opacity cursor-pointer"
-                phx-click={JS.dispatch("scroll-left", to: "#polls-closing-soon-carousel")}
+          {!-- Header actions to the right of the title: "View all" plus the
+               carousel navigation arrows (which need JS, hence the connected check). --}
+          <:action>
+            <div class="flex items-center gap-3">
+              <LinkLive
+                to={~p"/feed/polls"}
+                class="text-xs font-medium text-muted hover:text-primary"
+                aria-label={l("View all polls")}
               >
-                <#Icon iconify="ph:caret-left" class="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                aria-label={l("Scroll right")}
-                class="w-7 h-7 rounded-full bg-primary text-primary-content flex items-center justify-center shrink-0 disabled:opacity-30 transition-opacity cursor-pointer"
-                phx-click={JS.dispatch("scroll-right", to: "#polls-closing-soon-carousel")}
-              >
-                <#Icon iconify="ph:caret-right" class="w-4 h-4" />
-              </button>
+                {l("View all")}
+              </LinkLive>
+
+              <div :if={length(polls) > 1 && socket_connected?(@__context__)} class="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  aria-label={l("Scroll left")}
+                  class="w-7 h-7 rounded-full bg-primary text-primary-content flex items-center justify-center shrink-0 disabled:opacity-30 transition-opacity cursor-pointer"
+                  phx-click={JS.dispatch("scroll-left", to: "#polls-closing-soon-carousel")}
+                >
+                  <#Icon iconify="ph:caret-left" class="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={l("Scroll right")}
+                  class="w-7 h-7 rounded-full bg-primary text-primary-content flex items-center justify-center shrink-0 disabled:opacity-30 transition-opacity cursor-pointer"
+                  phx-click={JS.dispatch("scroll-right", to: "#polls-closing-soon-carousel")}
+                >
+                  <#Icon iconify="ph:caret-right" class="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </:action>
 
@@ -44,13 +56,76 @@
             >
               {#for poll <- polls}
                 {!-- `px-4` compensates for the preview's own `-mx-4` so its
-                     full-width status band aligns to the card edges. --}
-                <div
-                  class="flex-shrink-0 snap-start rounded-box border-hair border-secondary bg-base-100 overflow-hidden px-4 py-3 pb-0"
-                  style="width: calc(85% - 8px);"
-                >
-                  <QuestionLive object={poll} vote_state={vote_state} />
-                </div>
+                     full-width status band aligns to the card edges.
+
+                     The card carries the `PreviewActivity` hook + a hidden
+                     `.open_preview_link` trigger (`OpenPreviewLive`) so clicking
+                     it opens PreviewContent, exactly as a feed card does — the
+                     hook needs *both*, and `QuestionLive` provides neither.
+                     Clicks on the voting controls are safe: the hook bails on
+                     anything inside a `form`/`input`/`button`, and all of them
+                     live inside the preview's vote form. --}
+                {#case poll_permalink(poll)}
+                  {#match permalink}
+                    <div
+                      id={poll_card_id(poll)}
+                      data-href={permalink}
+                      data-role="poll_card"
+                      phx-hook="Bonfire.UI.Common.PreviewContentLive#PreviewActivity"
+                      tabIndex="0"
+                      class="flex-shrink-0 snap-start rounded-box border-hair border-secondary bg-base-100 overflow-hidden px-4 py-3 pb-0 cursor-pointer"
+                      style="width: calc(85% - 8px);"
+                    >
+                      <Bonfire.UI.Common.OpenPreviewLive
+                        :if={permalink}
+                        href={permalink}
+                        parent_id={poll_card_id(poll)}
+                        open_btn_text=""
+                        title_text={poll_title(poll)}
+                        modal_assigns={poll_preview_modal_assigns(poll, permalink)}
+                        root_assigns={[page_title: l("Discussion")]}
+                      />
+
+                      {!-- Author byline: in a feed this comes from the surrounding
+                           `ActivityLive`, which the widget doesn't use. --}
+                      {#case poll_creator(poll)}
+                        {#match nil}
+                        {#match creator}
+                          <div class="flex items-center gap-2 pb-2" data-role="poll_author">
+                            <LinkLive
+                              to={creator_path(creator)}
+                              parent_id={poll_card_id(poll)}
+                              class="shrink-0"
+                              label={l("%{name}'s profile", name: creator_name(creator))}
+                            >
+                              <Bonfire.UI.Common.AvatarLive
+                                ring
+                                parent_id={poll_card_id(poll)}
+                                user_id={id(creator)}
+                                src={creator_avatar(creator)}
+                                title={creator_name(creator)}
+                                class="rounded-full w-7 h-7"
+                                fallback_class="w-4 h-4 opacity-30 mx-auto"
+                              />
+                            </LinkLive>
+                            <div class="flex items-baseline gap-1 min-w-0 text-body">
+                              <LinkLive
+                                to={creator_path(creator)}
+                                parent_id={poll_card_id(poll)}
+                                opts={"data-id": "subject_name"}
+                                class="link link-hover font-medium text-base-content truncate"
+                              >
+                                {creator_name(creator)}
+                              </LinkLive>
+                              <span class="text-base-content/40" aria-hidden="true">·</span>
+                              <span class="text-muted shrink-0">{DatesTimes.date_from_now(id(poll))}</span>
+                            </div>
+                          </div>
+                      {/case}
+
+                      <QuestionLive object={poll} vote_state={vote_state} />
+                    </div>
+                {/case}
               {/for}
             </div>
           </div>
