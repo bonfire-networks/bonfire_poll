@@ -12,8 +12,17 @@
           title_class="flex items-center justify-between pb-card text-xs font-normal uppercase tracking-wide text-base-content"
           empty={polls == []}
           empty_icon="ph:list-checks-duotone"
-          empty_message={l("No open polls yet. Why not start one and get people voting?")}
+          empty_message={l("No open polls right now.")}
         >
+          <:empty_action>
+            <LinkLive
+              to={~p"/write"}
+              class="btn btn-sm btn-soft btn-primary rounded-full"
+              aria-label={l("Start a poll")}
+            >
+              {l("Start a poll")}
+            </LinkLive>
+          </:empty_action>
           {!-- Header actions to the right of the title: "View all" plus the
                carousel navigation arrows (which need JS, hence the connected check). --}
           <:action>
