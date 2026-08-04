@@ -14,17 +14,6 @@
           empty_icon="ph:list-checks-duotone"
           empty_message={l("No open polls right now.")}
         >
-          <:empty_action>
-            <LinkLive
-              to={~p"/write"}
-              class="btn btn-sm btn-soft btn-primary rounded-full"
-              aria-label={l("Start a poll")}
-            >
-              {l("Start a poll")}
-            </LinkLive>
-          </:empty_action>
-          {!-- Header actions to the right of the title: "View all" plus the
-               carousel navigation arrows (which need JS, hence the connected check). --}
           <:action>
             <div class="flex items-center gap-3">
               <LinkLive
