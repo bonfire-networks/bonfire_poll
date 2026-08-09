@@ -384,21 +384,23 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
       assert Q.time_remaining(past_dt(60)) =~ "Closed"
     end
 
+    # pass an explicit `now` so the diff is exact — computing now inside time_remaining
+    # made these assertions depend on elapsed wall-clock time (flaky under CI load)
     test "future datetimes produce a `_ minutes/hours/days left` string" do
-      assert Q.time_remaining(future_dt(15)) =~ "minutes left"
-      # 180 minutes → 2+ hours (clock-skew safe, well above the singular boundary)
-      assert Q.time_remaining(future_dt(180)) =~ "hours left"
-      # 72 hours → 3 days
-      assert Q.time_remaining(future_dt(72 * 60)) =~ "days left"
+      now = DateTime.utc_now()
+      assert Q.time_remaining(DateTime.add(now, 15 * 60), now) =~ "minutes left"
+      assert Q.time_remaining(DateTime.add(now, 180 * 60), now) =~ "hours left"
+      assert Q.time_remaining(DateTime.add(now, 72 * 3600), now) =~ "days left"
     end
 
     test "singular form for exactly one unit" do
-      # 2 minutes ahead → 1 minute left (clock skew safe, still in minute branch)
-      assert Q.time_remaining(future_dt(2)) == "1 minute left"
+      now = DateTime.utc_now()
+      # 90 seconds → 1 minute left
+      assert Q.time_remaining(DateTime.add(now, 90), now) == "1 minute left"
       # 70 minutes → 1 hour left
-      assert Q.time_remaining(future_dt(70)) == "1 hour left"
+      assert Q.time_remaining(DateTime.add(now, 70 * 60), now) == "1 hour left"
       # 25 hours → 1 day left
-      assert Q.time_remaining(future_dt(25 * 60)) == "1 day left"
+      assert Q.time_remaining(DateTime.add(now, 25 * 3600), now) == "1 day left"
     end
   end
 

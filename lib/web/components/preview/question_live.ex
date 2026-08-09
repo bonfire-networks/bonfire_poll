@@ -288,18 +288,20 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
 
   def winning_choice_ids(_, _), do: []
 
-  @doc "Calculate time remaining for a poll"
-  def time_remaining(nil), do: nil
+  @doc "Calculate time remaining for a poll (pass `now` for a deterministic reference time)"
+  def time_remaining(end_time, now \\ nil)
 
-  def time_remaining(end_time) when is_binary(end_time) do
+  def time_remaining(nil, _now), do: nil
+
+  def time_remaining(end_time, now) when is_binary(end_time) do
     case DateTime.from_iso8601(end_time) do
-      {:ok, dt, _} -> time_remaining(dt)
+      {:ok, dt, _} -> time_remaining(dt, now)
       _ -> nil
     end
   end
 
-  def time_remaining(%DateTime{} = end_time) do
-    now = DateTime.utc_now()
+  def time_remaining(%DateTime{} = end_time, now) do
+    now = now || DateTime.utc_now()
 
     case DateTime.compare(end_time, now) do
       :lt ->
@@ -327,7 +329,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
     end
   end
 
-  def time_remaining(_), do: nil
+  def time_remaining(_, _now), do: nil
 
   @doc "Localised, singular-aware vote count: `1 vote` / `N votes`."
   def pluralize_votes(n), do: lp("1 vote", "%{count} votes", n, count: n)
