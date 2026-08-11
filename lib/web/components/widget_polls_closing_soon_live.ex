@@ -44,7 +44,7 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
      assign_flash(
        socket,
        :info,
-       l("Polls have been reset.") <> l(" You need to reload to see updates, if any.")
+       l("Polls have been reset.") <> " " <> l("You need to reload to see updates, if any.")
      )}
   end
 
