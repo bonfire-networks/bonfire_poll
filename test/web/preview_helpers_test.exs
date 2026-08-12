@@ -9,6 +9,9 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
 
   use ExUnit.Case, async: true
 
+  # bucket this into the backend CI leg: bare `ExUnit.Case` skips the tag the extension case templates apply, so without it this also runs in the federation job catch-all
+  @moduletag :backend
+
   alias Bonfire.Poll.Web.Preview.QuestionLive, as: Q
   alias Bonfire.Poll.Web.Preview.ChoiceLive, as: C
   alias Bonfire.Poll.Questions
