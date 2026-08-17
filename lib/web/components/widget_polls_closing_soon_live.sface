@@ -48,7 +48,7 @@
           <div class="grid grid-cols-1 overflow-hidden">
             <div
               id="polls-closing-soon-carousel"
-              class="carousel-scroll items-start px-card scroll-pl-card pb-2"
+              class="carousel-scroll items-start scroll-pl-card pb-2"
               phx-hook="CarouselScroll"
             >
               {#for poll <- polls}
