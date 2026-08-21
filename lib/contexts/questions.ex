@@ -458,8 +458,14 @@ defmodule Bonfire.Poll.Questions do
     # Distinct voters count
     # voters_count = votes |> Enum.map(& &1.user_id) |> Enum.uniq() |> length()
 
-    # TODO
-    cc = []
+    is_public = Bonfire.Boundaries.object_public?(question)
+
+    %{to: to, cc: cc, bcc: bcc, mentions: mentions} =
+      Bonfire.Federate.ActivityPub.AdapterUtils.determine_recipients(
+        subject,
+        question,
+        is_public
+      )
 
     # Use PostContents.ap_prepare_object_note for main content
     main_obj =
@@ -468,8 +474,7 @@ defmodule Bonfire.Poll.Questions do
         verb,
         question,
         actor,
-        # TODO: mentions (empty for now)
-        [],
+        mentions,
         # TODO: context
         nil,
         # TODO: reply_to
@@ -491,16 +496,11 @@ defmodule Bonfire.Poll.Questions do
       })
       |> Map.put(options_key, options)
 
-    # Boundary/circle logic (reuse from Posts)
-    is_public = Bonfire.Boundaries.object_public?(question)
-
     interaction_policy =
       Bonfire.Federate.ActivityPub.AdapterUtils.ap_prepare_outgoing_interaction_policy(
         actor,
         question
       )
-
-    to = if is_public, do: [Bonfire.Federate.ActivityPub.AdapterUtils.public_uri()], else: []
 
     params =
       %{
@@ -510,13 +510,14 @@ defmodule Bonfire.Poll.Questions do
         #  TODO: we should prob publish during proposal period too?
         published: DatesTimes.to_iso8601(List.first(question.voting_dates || [])),
         to: to,
-        additional: %{"cc" => cc || []},
+        additional: %{"cc" => cc} |> Enums.maybe_put("bcc", bcc),
         object:
           Map.merge(question_obj, %{
             "to" => to,
-            "cc" => cc || [],
+            "cc" => cc,
             "interactionPolicy" => interaction_policy
           })
+          |> Enums.maybe_put("bcc", bcc)
       }
 
     ap_create_or_update_activity(verb, params)
