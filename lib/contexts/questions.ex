@@ -480,6 +480,7 @@ defmodule Bonfire.Poll.Questions do
         # TODO: reply_to
         nil
       )
+      |> Bonfire.Files.ap_merge_media(e(question, :media, nil))
 
     # Compose Question object, merging main_obj and poll-specific fields
     question_obj =
