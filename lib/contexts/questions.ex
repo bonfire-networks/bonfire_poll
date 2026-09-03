@@ -460,7 +460,8 @@ defmodule Bonfire.Poll.Questions do
 
     is_public = Bonfire.Boundaries.object_public?(question)
 
-    %{to: to, cc: cc, bcc: bcc, mentions: mentions} =
+    %{mentions: mentions} =
+      recipients =
       Bonfire.Federate.ActivityPub.AdapterUtils.determine_recipients(
         subject,
         question,
@@ -510,16 +511,11 @@ defmodule Bonfire.Poll.Questions do
         actor: actor,
         #  TODO: we should prob publish during proposal period too?
         published: DatesTimes.to_iso8601(List.first(question.voting_dates || [])),
-        to: to,
-        additional: %{"cc" => cc} |> Enums.maybe_put("bcc", bcc),
-        object:
-          Map.merge(question_obj, %{
-            "to" => to,
-            "cc" => cc,
-            "interactionPolicy" => interaction_policy
-          })
-          |> Enums.maybe_put("bcc", bcc)
+        object: Map.merge(question_obj, %{"interactionPolicy" => interaction_policy})
       }
+      # to/cc/bcc/audience, on the activity and the object, in one place — a poll asked in a group
+      # belongs to that group exactly as a post does
+      |> Bonfire.Federate.ActivityPub.AdapterUtils.put_addressing(recipients)
 
     ap_create_or_update_activity(verb, params)
   end
