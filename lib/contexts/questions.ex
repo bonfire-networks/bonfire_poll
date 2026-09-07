@@ -511,7 +511,7 @@ defmodule Bonfire.Poll.Questions do
         actor: actor,
         #  TODO: we should prob publish during proposal period too?
         published: DatesTimes.to_iso8601(List.first(question.voting_dates || [])),
-        object: Map.merge(question_obj, %{"interactionPolicy" => interaction_policy})
+        object: Map.merge(question_obj, interaction_policy)
       }
       # to/cc/bcc/audience, on the activity and the object, in one place — a poll asked in a group
       # belongs to that group exactly as a post does
