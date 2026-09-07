@@ -37,33 +37,59 @@ defmodule Bonfire.Poll.RuntimeConfig do
     # Question-creation epic. Owned here so the extension is self-contained.
     config :bonfire_poll, Bonfire.Poll.Questions,
       epics: [
+        # Grouped into parallel stages mirroring the `Bonfire.Posts` `:publish` epic, so the two behave the same way: a nested list runs in parallel, and each group may depend on the outputs of the ones before it. Keeping the same shape is what keeps the two orderings that matter in step — `SetBoundaries` before `Tag`, and `Federate` (which links an incoming AP object) before `AutoBoost` (which relays it).
         create: [
-          # Translate composer preset+tuning into Question attrs.
+          # Prep: translate composer preset+tuning into Question attrs, then build the changeset.
           {Bonfire.Poll.Acts.PresetAttrs, @question_act_opts},
           {Bonfire.Poll.Question.Create, @question_act_opts},
-          {Bonfire.Social.Acts.PostContents, @question_act_opts},
-          # Sets thread/reply_to (creates a `Replied` record, with reply_to_id=nil for a
-          # non-reply) so polls can participate in threaded discussions like posts.
-          {Bonfire.Social.Acts.Threaded, @question_act_opts},
-          {Bonfire.Me.Acts.Caretaker, @question_act_opts},
-          {Bonfire.Me.Acts.Creator, @question_act_opts},
-          {Bonfire.Files.Acts.URLPreviews, @question_act_opts},
-          {Bonfire.Files.Acts.AttachMedia, @question_act_opts},
-          {Bonfire.Tag.Acts.Tag, @question_act_opts},
-          {Bonfire.Boundaries.Acts.SetBoundaries, @question_act_opts},
-          # Activity casts :feed_publishes via FeedActivities.cast, so a
-          # separate Acts.Feeds step would be redundant.
-          {Bonfire.Social.Acts.Activity, @question_act_opts},
 
-          # Transaction.
+          # These steps are run in parallel
+          [
+            # with a sanitised body and tags extracted,
+            {Bonfire.Social.Acts.PostContents, @question_act_opts},
+
+            # possibly occurring in a thread — sets thread/reply_to (creating a `Replied` record,
+            # with reply_to_id=nil for a non-reply) so polls join threaded discussions like posts.
+            {Bonfire.Social.Acts.Threaded, @question_act_opts}
+          ],
+
+          # These steps are run in parallel and require the outputs of the previous ones
+          [
+            # possibly fetch contents of URLs (depends on PostContents),
+            {Bonfire.Files.Acts.URLPreviews, @question_act_opts},
+
+            # with appropriate boundaries established (depends on Threaded and PostContents),
+            {Bonfire.Boundaries.Acts.SetBoundaries, @question_act_opts}
+          ],
+
+          # These steps are run in parallel and require the outputs of the previous ones
+          [
+            # possibly with uploaded/linked media (optionally depends on URLPreviews),
+            {Bonfire.Files.Acts.AttachMedia, @question_act_opts},
+
+            # with extracted tags/mentions fully hooked up (depends on PostContents),
+            {Bonfire.Tag.Acts.Tag, @question_act_opts},
+
+            # summarised by an activity — casts :feed_publishes via FeedActivities.cast, so a
+            # separate Acts.Feeds step would be redundant.
+            {Bonfire.Social.Acts.Activity, @question_act_opts},
+            {Bonfire.Me.Acts.Caretaker, @question_act_opts},
+            {Bonfire.Me.Acts.Creator, @question_act_opts}
+          ],
+
+          # Now we have a short critical section
           EctoActs.Begin,
           EctoActs.Work,
           EctoActs.Commit,
           {Bonfire.Poll.Acts.Choices.Create, @question_act_opts},
-          {Bonfire.Search.Acts.Queue, @question_act_opts},
 
-          # Oban prefers these out of the transaction.
-          {Bonfire.Social.Acts.Federate, @question_act_opts},
+          # These steps are run in parallel. Oban prefers them out of the transaction.
+          [
+            {Bonfire.Search.Acts.Queue, @question_act_opts},
+            {Bonfire.Social.Acts.Federate, @question_act_opts}
+          ],
+
+          # Once the activity/object exists (including in AP db), we can apply these extra side effects
           {Bonfire.Tags.Acts.AutoBoost, @question_act_opts}
         ]
       ]

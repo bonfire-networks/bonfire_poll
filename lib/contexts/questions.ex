@@ -531,13 +531,25 @@ defmodule Bonfire.Poll.Questions do
   - activity: the AP activity
   - object: the AP Question object
   """
+  def ap_receive_activity(creator, activity, object, extra_opts \\ [])
+
   def ap_receive_activity(
         creator,
         %{data: %{"type" => "Question"} = question_data} = activity,
-        _object
+        _object,
+        extra_opts
       ) do
     attrs = ap_question_attrs(question_data)
-    opts = ap_receive_opts(creator, activity, question_data, attrs)
+
+    # a bare `Question` with no `Create` wrapper: the activity IS the object here
+    opts =
+      ap_receive_opts(
+        creator,
+        activity,
+        question_data,
+        attrs,
+        Keyword.put_new(extra_opts, :ap_object, activity)
+      )
 
     create(opts)
   end
@@ -545,13 +557,14 @@ defmodule Bonfire.Poll.Questions do
   def ap_receive_activity(
         creator,
         %{data: %{"type" => type} = activity_data} = activity,
-        %{"id" => ap_id} = question_data
+        %{"id" => ap_id} = question_data,
+        extra_opts
       )
       when is_in(type, ["Create", "Update"]) do
     attrs = ap_question_attrs(question_data)
 
     opts =
-      ap_receive_opts(creator, activity, question_data, attrs)
+      ap_receive_opts(creator, activity, question_data, attrs, extra_opts)
 
     case type do
       "Create" ->
@@ -568,12 +581,19 @@ defmodule Bonfire.Poll.Questions do
     end
   end
 
+  # Re-dispatches with the RAW data, which is what the clause above matches on — so the `%ActivityPub.Object{}` is carried in `extra_opts` instead, or `Acts.Federate` has nothing to tie the new question to and the group's announce of it never federates.
   def ap_receive_activity(
         creator,
         activity,
-        %{data: question_data}
+        %{data: question_data} = ap_object,
+        extra_opts
       ) do
-    ap_receive_activity(creator, activity, question_data)
+    ap_receive_activity(
+      creator,
+      activity,
+      question_data,
+      Keyword.put_new(extra_opts, :ap_object, ap_object)
+    )
   end
 
   def update_question_and_choices(creator, %Question{} = question, opts) do
@@ -626,7 +646,7 @@ defmodule Bonfire.Poll.Questions do
   end
 
   # Shared logic for boundary/circle/recipients extraction
-  defp ap_receive_opts(creator, activity, question_data, attrs) do
+  defp ap_receive_opts(creator, activity, question_data, attrs, extra_opts \\ []) do
     is_public = Bonfire.Federate.ActivityPub.AdapterUtils.is_public?(activity)
 
     direct_recipients =
@@ -646,5 +666,8 @@ defmodule Bonfire.Poll.Questions do
       boundary: boundary,
       question_attrs: attrs
     ]
+    # `publish_in` names the group(s) the activity was addressed to, derived once at the ingest seam. `Bonfire.Tag.Acts.Tag` reads it through `Threads.maybe_publish_in/3` and auto-boosts whichever are categories, which is what files the poll as the group's — without it a poll sent into a group arrives as a stray poll, since a top-level Question has no `reply_to` to infer one from either.
+    # `ap_object` lets `Bonfire.Social.Acts.Federate` tie that AP object to the question BEFORE the acts that relay it run, which is what makes the group's announce of it federate rather than quietly resolve to nothing.
+    |> Keyword.merge(Keyword.take(extra_opts, [:publish_in, :ap_object]))
   end
 end
