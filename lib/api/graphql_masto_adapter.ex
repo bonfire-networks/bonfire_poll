@@ -1,83 +1,167 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
   defmodule Bonfire.Poll.API.GraphQLMasto.Adapter do
-    @moduledoc """
-    Mastodon-compatible Poll API endpoints.
+    @moduledoc "Translates Mastodon poll requests into the shared GraphQL API."
 
-    Handles viewing polls and voting on them. Uses direct domain calls
-    to the well-established context functions in `Bonfire.Poll`.
+    alias Bonfire.API.GraphQL.{RestAdapter, Schema}
+    alias Bonfire.API.MastoCompat.{Fragments, Mappers}
+    import Bonfire.API.MastoCompat.Helpers, only: [get_field: 2]
+
+    @poll_fields """
+    id
+    __typename
+    voting_format: votingFormat
+    voting_close_at: votingCloseAt
+    votes_count: votesCount
+    voters_count: votersCount
+    voted
+    own_votes: ownVotes { id }
+    choices { id post_content: postContent { name html_body: htmlBody summary } votes_result_total: votesResultTotal }
+    """
+    @poll_query "query($id: ID!) { poll(filter: {id: $id}) { #{@poll_fields} } }"
+    @create_query """
+    mutation($content: PostContentInput!, $choices: [PostContentInput], $format: String, $seconds: Int,
+      $boundary: String, $circles: [ID], $boundaries: [String], $context: ID, $reply: ID) {
+      createPoll(postContent: $content, choices: $choices, votingFormat: $format, durationSeconds: $seconds,
+        boundary: $boundary, toCircles: $circles, toBoundaries: $boundaries,
+        contextId: $context, replyTo: $reply) {
+        #{@poll_fields}
+        post_content: postContent { name html_body: htmlBody summary }
+        activity { id subject { #{Fragments.actor_fields()} } #{Fragments.thread_fields()} }
+      }
+    }
+    """
+    @vote_query """
+    mutation($id: String!, $votes: [VoteInput]) {
+      vote(pollId: $id, votes: $votes, allowRevoting: false) { id }
+    }
     """
 
-    use Bonfire.Common.Utils
-    use Bonfire.Common.Repo
+    # Mastodon's documented poll limits (also advertised by the instance endpoint).
+    @max_options 100
+    @max_characters_per_option 50_000
+    @min_expiration 60
+    @max_expiration 31_536_000
 
-    alias Bonfire.API.GraphQL.RestAdapter
-    alias Bonfire.API.MastoCompat.Mappers
-    alias Bonfire.Poll.Questions
-    alias Bonfire.Poll.Votes
+    @poll_types %{
+      options: {:array, :string},
+      expires_in: :integer,
+      multiple: :boolean,
+      hide_totals: :boolean
+    }
 
-    @doc """
-    GET /api/v1/polls/:id
+    @doc "Creates a poll through GraphQL, preserving the status adapter's resolved audience."
+    def create_poll(params, opts) when is_map(params) do
+      attrs = Keyword.fetch!(opts, :post_attrs)
 
-    Returns a poll by ID. Public if parent status is public,
-    requires authentication for private polls.
-    """
-    def show_poll(%{"id" => id}, conn) do
-      current_user = conn.assigns[:current_user]
+      with [] <- Map.get(attrs, :uploaded_media, []),
+           {:ok, poll} <- validate_poll(params) do
+        variables = %{
+          "content" => %{
+            "htmlBody" => attrs.post_content.html_body,
+            "summary" => attrs.post_content.summary
+          },
+          "choices" => Enum.map(poll.options, &%{"name" => &1}),
+          "format" => if(poll.multiple, do: "multiple", else: "single"),
+          "seconds" => poll.expires_in,
+          "boundary" => opts[:boundary],
+          "circles" => opts[:to_circles],
+          "boundaries" => opts[:to_boundaries],
+          "context" => opts[:context_id],
+          "reply" => attrs.reply_to_id
+        }
 
-      case Questions.read(id, current_user: current_user) do
-        {:ok, question} ->
-          poll = Mappers.Poll.from_question(question, current_user: current_user)
-          RestAdapter.json(conn, poll)
-
-        _ ->
-          RestAdapter.error_fn({:error, :not_found}, conn)
+        run(@create_query, variables, "createPoll", opts[:current_user])
+      else
+        {:error, _} = error -> error
+        _ -> {:error, {:unprocessable_entity, "Polls cannot include media attachments"}}
       end
     end
 
-    @doc """
-    POST /api/v1/polls/:id/votes
+    def create_poll(_params, _opts),
+      do: {:error, {:unprocessable_entity, "Invalid poll parameters"}}
 
-    Vote on a poll. Requires authentication. The `choices[]` parameter
-    contains 0-based indices of the choices to vote for.
+    @doc "Loads the shared GraphQL poll representation for both status and poll responses."
+    def read_poll(id, current_user) do
+      run(@poll_query, %{"id" => id}, "poll", current_user)
+    end
 
-    Returns 422 if:
-    - Poll has expired
-    - User has already voted
-    - Invalid choice indices
-    """
+    @doc "GET /api/v1/polls/:id."
+    def show_poll(%{"id" => id}, conn) do
+      case read_poll(id, conn.assigns[:current_user]) do
+        {:ok, poll} -> RestAdapter.json(conn, Mappers.Poll.from_question(poll))
+        {:error, reason} -> RestAdapter.error_fn({:error, reason}, conn)
+      end
+    end
+
+    @doc "POST /api/v1/polls/:id/votes; translates option indices into GraphQL choice IDs."
     def vote_on_poll(%{"id" => id} = params, conn) do
       RestAdapter.with_current_user(conn, fn current_user ->
-        # First fetch the poll to resolve choice indices to IDs
-        with {:ok, question} <- Questions.read(id, current_user: current_user),
-             {:ok, choice_inputs} <- resolve_choice_indices(question, params),
-             {:ok, _vote_activity} <- Votes.vote(current_user, question, choice_inputs, []) do
-          # Refetch poll to get updated state with vote counts
-          case Questions.read(id, current_user: current_user) do
-            {:ok, updated_question} ->
-              poll = Mappers.Poll.from_question(updated_question, current_user: current_user)
-              RestAdapter.json(conn, poll)
-
-            _ ->
-              RestAdapter.error_fn({:error, :not_found}, conn)
-          end
+        with {:ok, poll} <- read_poll(id, current_user),
+             {:ok, votes} <- resolve_choice_indices(poll, params),
+             variables = %{
+               "id" => id,
+               "votes" => Enum.map(votes, &%{"choiceId" => &1.choice_id, "weight" => "1"})
+             },
+             {:ok, _} <- run(@vote_query, variables, "vote", current_user),
+             {:ok, updated} <- read_poll(id, current_user) do
+          RestAdapter.json(conn, Mappers.Poll.from_question(updated))
         else
-          {:error, "Voting is not open for this poll"} ->
-            RestAdapter.error_fn({:error, :poll_expired}, conn)
-
-          {:error, :invalid_choices} ->
-            RestAdapter.error_fn({:error, "Invalid choice indices"}, conn)
-
-          {:error, :no_choices} ->
-            RestAdapter.error_fn({:error, "choices[] parameter is required"}, conn)
+          {:error, reason} when reason in [:no_choices, :invalid_choices] ->
+            RestAdapter.error_fn(
+              {:error, {:unprocessable_entity, "Invalid choice indices"}},
+              conn
+            )
 
           {:error, reason} ->
             RestAdapter.error_fn({:error, reason}, conn)
-
-          _ ->
-            RestAdapter.error_fn({:error, :not_found}, conn)
         end
       end)
+    end
+
+    defp run(query, variables, field, current_user) do
+      case Absinthe.run(query, Schema,
+             variables: variables,
+             context: Schema.context(%{current_user: current_user})
+           ) do
+        {:ok, %{errors: errors}} -> {:error, errors}
+        {:ok, %{data: %{^field => %{} = result}}} -> {:ok, result}
+        {:ok, %{data: _}} -> {:error, :not_found}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+
+    defp validate_poll(params) do
+      changeset =
+        {%{multiple: false, hide_totals: false}, @poll_types}
+        |> Ecto.Changeset.cast(params, Map.keys(@poll_types))
+        |> Ecto.Changeset.validate_required([:options, :expires_in])
+        |> Ecto.Changeset.validate_length(:options, min: 2, max: @max_options)
+        |> Ecto.Changeset.validate_number(:expires_in,
+          greater_than_or_equal_to: @min_expiration,
+          less_than_or_equal_to: @max_expiration
+        )
+        |> Ecto.Changeset.validate_change(:options, fn :options, options ->
+          if Enum.all?(options, &valid_option?/1),
+            do: [],
+            else: [options: "must contain nonempty options within the character limit"]
+        end)
+
+      cond do
+        Ecto.Changeset.get_field(changeset, :hide_totals) == true ->
+          {:error, {:unprocessable_entity, "Per-poll hidden totals are not supported"}}
+
+        changeset.valid? ->
+          {:ok, Ecto.Changeset.apply_changes(changeset)}
+
+        true ->
+          {:error, {:unprocessable_entity, "Invalid poll options or expiration"}}
+      end
+    end
+
+    defp valid_option?(option) do
+      is_binary(option) and String.trim(option) != "" and
+        String.length(option) <= @max_characters_per_option
     end
 
     # Resolve Mastodon's 0-based choice indices to Bonfire choice IDs
@@ -85,28 +169,30 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     defp resolve_choice_indices(question, params) do
       indices = extract_choice_indices(params)
 
-      if Enum.empty?(indices) do
-        {:error, :no_choices}
-      else
-        # Get choices in same order as mapper (sorted by ID)
-        choices =
-          e(question, :choices, [])
-          |> List.wrap()
-          |> Enum.sort_by(&e(&1, :id, ""))
+      choices =
+        (get_field(question, :choices) || [])
+        |> List.wrap()
+        |> Enum.sort_by(&get_field(&1, :id))
 
-        choice_inputs =
-          indices
-          |> Enum.map(fn idx ->
-            choice = Enum.at(choices, idx)
-            if choice, do: %{choice_id: e(choice, :id, nil), weight: 1}, else: nil
-          end)
-          |> Enum.reject(&is_nil/1)
+      cond do
+        indices == [] ->
+          {:error, :no_choices}
 
-        if Enum.empty?(choice_inputs) do
+        not Enum.all?(indices, &(is_integer(&1) and &1 >= 0 and &1 < length(choices))) ->
           {:error, :invalid_choices}
-        else
-          {:ok, choice_inputs}
-        end
+
+        get_field(question, :voting_format) == "single" and length(Enum.uniq(indices)) > 1 ->
+          {:error, :invalid_choices}
+
+        true ->
+          inputs =
+            indices
+            |> Enum.uniq()
+            |> Enum.map(fn index ->
+              %{choice_id: choices |> Enum.at(index) |> get_field(:id), weight: 1}
+            end)
+
+          {:ok, inputs}
       end
     end
 
@@ -118,7 +204,6 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
       raw_choices
       |> List.wrap()
       |> Enum.map(&parse_index/1)
-      |> Enum.reject(&is_nil/1)
     end
 
     defp parse_index(idx) when is_integer(idx), do: idx

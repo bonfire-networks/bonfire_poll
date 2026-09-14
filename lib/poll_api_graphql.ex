@@ -27,8 +27,13 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         # Load choices here because only the poll resolver has both poll and choice context.
         resolve(fn poll, _, info ->
           user = GraphQL.current_user(info)
-          visible = Votes.results_visible?(nil, poll, current_user: user)
           vote_state = Votes.preview_vote_state_for_question(poll, user)
+
+          visible =
+            Votes.results_visible?(nil, poll,
+              current_user: user,
+              viewer_voted?: map_size(vote_state.my_vote_weights) > 0
+            )
 
           choices =
             poll_choices(poll)
@@ -96,7 +101,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
             |> Map.keys()
             |> MapSet.new()
 
-          visible = Votes.results_visible?(nil, poll, current_user: user)
+          visible =
+            Votes.results_visible?(nil, poll,
+              current_user: user,
+              viewer_voted?: map_size(vote_state.my_vote_weights) > 0
+            )
 
           choices =
             poll_choices(poll)
@@ -177,6 +186,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         arg(:context_id, :id)
         # Without a voting window the poll has nil voting_dates and cannot be voted on.
         arg(:duration_hours, :integer)
+        arg(:duration_seconds, :integer)
+        arg(:to_boundaries, list_of(:string))
 
         resolve(&create_poll/2)
       end
@@ -184,6 +195,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field :vote, :activity do
         arg(:poll_id, non_null(:string))
         arg(:votes, list_of(:vote_input))
+        arg(:allow_revoting, :boolean, default_value: true)
 
         resolve(&vote/2)
       end
@@ -287,28 +299,35 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       if current_user do
         with :ok <- validate_poll_choices(args[:choices]) do
-          case args[:duration_hours] || 72 do
-            hours when is_integer(hours) and hours > 0 ->
+          case args[:duration_seconds] || (args[:duration_hours] || 72) * 3600 do
+            seconds when is_integer(seconds) and seconds > 0 ->
               now = DateTime.utc_now()
 
               question_attrs =
-                Map.put(args, :voting_dates, [now, DateTime.add(now, hours * 3600, :second)])
+                args
+                |> Map.put(:voting_dates, [now, DateTime.add(now, seconds, :second)])
+                |> Map.put(:reply_to_id, args[:reply_to])
 
               opts = [
                 current_user: current_user,
                 question_attrs: question_attrs
-                #  boundary: e(params, "to_boundaries", "mentions")
               ]
 
               opts =
-                if args[:context_id],
-                  do: opts ++ [context_id: args[:context_id]],
-                  else: opts
+                [:boundary, :to_boundaries, :to_circles, :context_id]
+                |> Enum.reduce(opts, fn key, opts ->
+                  if is_nil(args[key]), do: opts, else: Keyword.put(opts, key, args[key])
+                end)
 
               Questions.create(opts)
 
             _ ->
-              {:error, "duration_hours must be a positive integer"}
+              {:error,
+               %Bonfire.Fail{
+                 code: :invalid_argument,
+                 message: "Poll duration must be a positive integer",
+                 status: 422
+               }}
           end
         end
       else
@@ -346,18 +365,41 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
         if votes == [] do
           {:error, "At least one vote is required"}
         else
-          with {:ok, f} <-
+          with :ok <- allow_vote(question, current_user, args),
+               {:ok, f} <-
                  Votes.vote(
                    current_user,
                    question,
                    Enum.map(votes, &vote_input!/1)
-                 ),
-               do: {:ok, e(f, :activity, nil) || f}
+                 ) do
+            {:ok, e(f, :activity, nil) || f}
+          else
+            {:error, reason} when is_binary(reason) ->
+              {:error, %Bonfire.Fail{code: :invalid_argument, message: reason, status: 422}}
+
+            other ->
+              other
+          end
         end
       else
         raise(Bonfire.Fail.Auth, :needs_login)
       end
     end
+
+    defp allow_vote(question_id, current_user, %{allow_revoting: false}) do
+      if MapSet.member?(Votes.voted_question_ids(current_user, [question_id]), question_id) do
+        {:error,
+         %Bonfire.Fail{
+           code: :invalid_argument,
+           message: "You have already voted on this poll",
+           status: 422
+         }}
+      else
+        :ok
+      end
+    end
+
+    defp allow_vote(_question_id, _current_user, _args), do: :ok
 
     defp vote_input!(%{choice_id: nil} = other) do
       error(other, "invalid input")
