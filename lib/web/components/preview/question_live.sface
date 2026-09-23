@@ -254,7 +254,7 @@
                           <Iconify.iconify icon="ph:info-duotone" class="h-4 w-4 shrink-0 text-muted" />
                           <span class="text-base-content font-medium">{l("How this is decided")}</span>
                           <Iconify.iconify
-                            icon="ph:caret-down-bold"
+                            icon="carbon:chevron-down-bold"
                             class="size-4 ml-auto text-primary transition-transform group-open/how:rotate-180 motion-reduce:transition-none"
                           />
                         </summary>
