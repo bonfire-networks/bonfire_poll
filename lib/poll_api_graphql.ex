@@ -45,6 +45,11 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field(:activity, :activity)
 
+      @desc "The poll's author."
+      field :creator, :any_character do
+        resolve(&Bonfire.Social.API.GraphQL.resolve_creator/3)
+      end
+
       field :proposals_open_at, :datetime do
         resolve(fn poll, _, _ ->
           {:ok, (poll.proposal_dates || []) |> List.first()}

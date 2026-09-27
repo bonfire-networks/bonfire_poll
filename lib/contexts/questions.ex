@@ -211,7 +211,7 @@ defmodule Bonfire.Poll.Questions do
 
   def options_key_from_ap_data(_), do: nil
 
-  @doc "List posts created by the user and which are in their outbox, which are not replies"
+  @doc "List polls created by the user and which are in their outbox, which are not replies"
   def list_by(by_user, opts \\ []) do
     # query FeedPublish
     # [posts_by: {by_user, &filter/3}]
