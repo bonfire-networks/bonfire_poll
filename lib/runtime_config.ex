@@ -59,7 +59,7 @@ defmodule Bonfire.Poll.RuntimeConfig do
             {Bonfire.Files.Acts.URLPreviews, @question_act_opts}
           ],
 
-          # with extracted tags/mentions fully hooked up (depends on PostContents). On its own, since an Act in a parallel group cannot see what the others assign, and SetBoundaries needs the ACLs that come with publishing in a group (`published_in_acl_ids`)
+          # with extracted tags/mentions fully hooked up (depends on PostContents). On its own, since an Act in a parallel group cannot see what the others assign, and SetBoundaries needs the boundary options that come with publishing in a group (`published_in_boundary_options`)
           {Bonfire.Tag.Acts.Tag, @question_act_opts},
 
           # These steps are run in parallel and require the outputs of the previous ones
