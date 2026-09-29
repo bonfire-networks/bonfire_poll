@@ -56,19 +56,19 @@ defmodule Bonfire.Poll.RuntimeConfig do
           # These steps are run in parallel and require the outputs of the previous ones
           [
             # possibly fetch contents of URLs (depends on PostContents),
-            {Bonfire.Files.Acts.URLPreviews, @question_act_opts},
-
-            # with appropriate boundaries established (depends on Threaded and PostContents),
-            {Bonfire.Boundaries.Acts.SetBoundaries, @question_act_opts}
+            {Bonfire.Files.Acts.URLPreviews, @question_act_opts}
           ],
+
+          # with extracted tags/mentions fully hooked up (depends on PostContents). On its own, since an Act in a parallel group cannot see what the others assign, and SetBoundaries needs the ACLs that come with publishing in a group (`published_in_acl_ids`)
+          {Bonfire.Tag.Acts.Tag, @question_act_opts},
 
           # These steps are run in parallel and require the outputs of the previous ones
           [
+            # with appropriate boundaries established (depends on Threaded and PostContents, and on Tag for the group's ACLs),
+            {Bonfire.Boundaries.Acts.SetBoundaries, @question_act_opts},
+
             # possibly with uploaded/linked media (optionally depends on URLPreviews),
             {Bonfire.Files.Acts.AttachMedia, @question_act_opts},
-
-            # with extracted tags/mentions fully hooked up (depends on PostContents),
-            {Bonfire.Tag.Acts.Tag, @question_act_opts},
 
             # summarised by an activity — casts :feed_publishes via FeedActivities.cast, so a
             # separate Acts.Feeds step would be redundant.
