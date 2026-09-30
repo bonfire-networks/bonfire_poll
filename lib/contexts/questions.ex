@@ -501,7 +501,8 @@ defmodule Bonfire.Poll.Questions do
     interaction_policy =
       Bonfire.Federate.ActivityPub.AdapterUtils.ap_prepare_outgoing_interaction_policy(
         actor,
-        question
+        question,
+        mentioned_characters: recipients[:mentioned_characters]
       )
 
     params =
