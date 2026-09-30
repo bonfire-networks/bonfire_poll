@@ -50,7 +50,7 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   def smart_input_module, do: [:poll, Bonfire.Poll.Question]
 
   def smart_input_icon(_), do: "ph:list-checks-duotone"
-  def smart_input_label(_), do: l("Poll")
+  def smart_input_label(_), do: l("Create poll")
 
   # `:merge_tuning` carries only one changed toggle; merge it into the
   # existing tuning_state so the other toggles survive.
