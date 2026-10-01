@@ -31,7 +31,8 @@
                   variant="outline"
                   size="sm"
                   class="border-secondary"
-                  phx_click={JS.dispatch("scroll-left", to: "#polls-closing-soon-carousel")}
+                  data-carousel-scroll="previous"
+                  aria-controls="polls-closing-soon-carousel"
                 />
                 <.icon_button
                   icon="carbon:chevron-right"
@@ -39,7 +40,8 @@
                   variant="outline"
                   size="sm"
                   class="border-secondary"
-                  phx_click={JS.dispatch("scroll-right", to: "#polls-closing-soon-carousel")}
+                  data-carousel-scroll="next"
+                  aria-controls="polls-closing-soon-carousel"
                 />
               </div>
             </div>
