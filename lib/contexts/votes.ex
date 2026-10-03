@@ -518,9 +518,12 @@ defmodule Bonfire.Poll.Votes do
         {:ok, vote}
 
       {:error, e} ->
+        # already voted on this choice (the unique index rejected the insert), so the re-vote replaces the weight
         case get(voter, choice) do
           {:ok, vote} ->
-            {:ok, vote}
+            vote
+            |> Vote.changeset(%{vote_weight: weight || 1})
+            |> repo().update()
 
           _ ->
             error(e)
