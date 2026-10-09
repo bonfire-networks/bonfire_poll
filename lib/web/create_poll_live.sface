@@ -86,7 +86,7 @@
             phx-click="Bonfire.Poll:add_option"
             phx-value-current={@visible_option_count}
             phx-target="#smart_input"
-            class="self-start inline-flex items-center gap-2 rounded-md border border-divider bg-base-100 px-3 py-2 min-h-[44px] text-sm font-medium text-base-content hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
+            class="self-start inline-flex items-center gap-2 rounded-selector border border-divider bg-base-100 px-3 py-2 min-h-[44px] text-sm font-medium text-base-content hover:bg-fill focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60"
           >
             <#Icon iconify="ph:plus" class="h-4 w-4" />
             <span>{l("Add option")}</span>

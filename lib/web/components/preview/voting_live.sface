@@ -138,7 +138,7 @@
                   data-color-class={score_color_class(i)}
                   title={"#{name}: #{description}"}
                   class={[
-                    "group relative inline-flex items-center justify-center cursor-pointer rounded-md transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
+                    "group relative inline-flex items-center justify-center cursor-pointer rounded-selector transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
                     "min-w-[36px] min-h-[36px] px-1": @compact,
                     "min-w-[40px] min-h-[40px] px-1.5": !@compact
                   ]}

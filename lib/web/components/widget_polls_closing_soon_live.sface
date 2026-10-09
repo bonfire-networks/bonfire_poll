@@ -107,7 +107,7 @@
                                 fallback_class="w-4 h-4 opacity-30 mx-auto"
                               />
                             </LinkLive>
-                            <div class="flex items-baseline gap-1 min-w-0 text-body">
+                            <div class="flex items-baseline gap-1 min-w-0 text-base">
                               <LinkLive
                                 to={creator_path(creator)}
                                 parent_id={poll_card_id(poll)}

@@ -85,7 +85,7 @@
                   class={[
                     # poll question = the post body, shown at the display size (Figma)
                     "object_body px-4 prose-bonfire translatable prose break-normal max-w-none text-base-content",
-                    "text-display font-medium prose-p:text-display prose-p:font-medium prose-p:my-1",
+                    "text-xl font-medium prose-p:text-xl prose-p:font-medium prose-p:my-1",
                     "prose-hr:!my-2 prose-br:hidden",
                     previewable_truncate: !@viewing_main_object
                   ]}
@@ -185,19 +185,19 @@
                       {#match kind_label}
                         <div
                           data-role="poll-status-band"
-                          class="flex flex-wrap items-center gap-0 gap-y-1.5 px-card py-content border-divider border-b-hair text-body"
+                          class="flex flex-wrap items-center gap-0 gap-y-1.5 px-card py-content border-divider border-b-hair text-base"
                         >
                           {!-- Kind + state as outline pills on the left (Figma): the
                            kind names the process (primary outline), the state pill
                            carries a `bg-current` dot in the state colour. --}
                           <span
-                            class="inline-flex items-center rounded-full border-hair border-primary px-2.5 py-0.5 text-body font-normal uppercase tracking-wide text-primary"
+                            class="inline-flex items-center rounded-full border-hair border-primary px-2.5 py-0.5 text-base font-normal uppercase tracking-wide text-primary"
                             data-role="poll-kind"
                           >{kind_label}</span>
 
                           <span
                             class={[
-                              "inline-flex items-center gap-1.5 rounded-full border-hair px-2.5 py-0.5 text-body font-normal uppercase tracking-wide",
+                              "inline-flex items-center gap-1.5 rounded-full border-hair px-2.5 py-0.5 text-base font-normal uppercase tracking-wide",
                               state_tone_class(state)
                             ]}
                             data-role="poll-state-label"
@@ -208,7 +208,7 @@
 
                           {!-- Meta on the right (Figma): time left, then reactions/votes
                            count, in base-content — not muted. --}
-                          <div class="ml-auto inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-body text-base-content tabular-nums">
+                          <div class="ml-auto inline-flex items-center gap-x-3 gap-y-1 flex-wrap text-base text-base-content tabular-nums">
                             {#if state == :open}
                               {#case time_remaining_label}
                                 {#match nil}
