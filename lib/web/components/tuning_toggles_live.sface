@@ -1,9 +1,9 @@
 <section
   aria-label={l("Poll settings")}
   data-role="poll-tuning-panel"
-  class="rounded-md border border-secondary bg-base-100"
+  class="rounded-md border border-divider bg-base-100"
 >
-  <ul class="divide-base-content/8">
+  <ul class="divide-divider">
     {!-- Duration row. Single-phase by default; two-phase when proposal_phase is on. --}
     <li class="flex items-start justify-between gap-3 px-3 py-3 flex-wrap">
       <div class="flex flex-col gap-0.5 min-w-0">
@@ -35,7 +35,7 @@
             </select>
             <Iconify.iconify
               icon="ph:arrow-right"
-              class="size-4 text-base-content/40 shrink-0"
+              class="size-4 text-subtle shrink-0"
               aria-hidden="true"
             />
             <select

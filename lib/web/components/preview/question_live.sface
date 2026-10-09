@@ -59,12 +59,12 @@
                   <button
                     x-on:click="content_open = ! content_open; $nextTick(() => { expandable = $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight });"
                     x-text={"content_open ? '#{l("Show less")}' : '#{l("Show more")}'"}
-                    class="show_more_toggle_action ml-1 normal-case !border !border-secondary btn-outline btn btn-sm"
+                    class="show_more_toggle_action ml-1 normal-case !border !border-divider btn-outline btn btn-sm"
                   >
                     {l("Show more")}
                   </button>
                 {#else}
-                  <div class="ml-1 normal-case !border !border-secondary btn-outline btn btn-sm">
+                  <div class="ml-1 normal-case !border !border-divider btn-outline btn btn-sm">
                     {l("Show more")}
                   </div>
                 {/if}
@@ -105,18 +105,18 @@
              would keep blocking voting after suggestions close. --}
             {#if proposal_open}
               <div class="mt-content">
-                <div class="flex items-center gap-2 px-3 py-2 border-b border-secondary text-sm text-muted">
+                <div class="flex items-center gap-2 px-3 py-2 border-b border-divider text-sm text-muted">
                   <Iconify.iconify icon="ph:lightbulb-duotone" class="size-4 shrink-0" />
                   <span class="font-medium text-base-content">{l("Proposal phase")}</span>
                   {#case proposal_end_label}
                     {#match nil}
                     {#match label}
-                      <span class="text-base-content/40" aria-hidden="true">·</span>
+                      <span class="text-subtle" aria-hidden="true">·</span>
                       <span class="tabular-nums">{label}</span>
                   {/case}
                 </div>
 
-                <div class="divide-hair divide-secondary">
+                <div class="divide-hair divide-divider">
                   {#for {choice, idx} <- Enum.with_index(choices)}
                     <ChoiceLive
                       question={question_without_choices}
@@ -158,7 +158,7 @@
                       placeholder={l("Suggest an option")}
                       required
                       maxlength="200"
-                      class="flex-1 min-w-0 rounded-md border border-secondary bg-base-100 px-3 py-2 text-sm text-base-content placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
+                      class="flex-1 min-w-0 rounded-md border border-divider bg-base-100 px-3 py-2 text-sm text-base-content placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
                     />
                     <button type="submit" data-role="propose-submit" class="btn btn-primary btn-sm">
                       {l("Suggest")}
@@ -185,7 +185,7 @@
                       {#match kind_label}
                         <div
                           data-role="poll-status-band"
-                          class="flex flex-wrap items-center gap-0 gap-y-1.5 px-card py-content border-secondary border-b-hair text-body"
+                          class="flex flex-wrap items-center gap-0 gap-y-1.5 px-card py-content border-divider border-b-hair text-body"
                         >
                           {!-- Kind + state as outline pills on the left (Figma): the
                            kind names the process (primary outline), the state pill
@@ -246,7 +246,7 @@
                     {!-- Thread-only: the process rules, made legible on demand. --}
                     {#if @viewing_main_object and voting_format == "weighted_multiple"}
                       <details
-                        class="border-b-hair border-secondary bg-base-200"
+                        class="border-b-hair border-divider bg-base-200"
                         data-role="how-decided"
                         x-on:click.stop
                       >
@@ -270,7 +270,7 @@
 
                     <div
                       class={[
-                        "flex flex-col divide-secondary divide-hair",
+                        "flex flex-col divide-divider divide-hair",
                         "py-half": @viewing_main_object
                       ]}
                       data-role="choices"
@@ -361,7 +361,7 @@
                       {#case state}
                         {#match :closed_empty}
                           <div
-                            class="flex items-center gap-2 px-3 py-2.5 border-t border-secondary text-sm text-muted"
+                            class="flex items-center gap-2 px-3 py-2.5 border-t border-divider text-sm text-muted"
                             data-role="outcome"
                           >
                             <Iconify.iconify icon="ph:lock-key" class="h-4 w-4 shrink-0" />
@@ -376,7 +376,7 @@
                               {#match ""}
                               {#match names}
                                 <div
-                                  class="flex items-center gap-1.5 px-3 py-2 border-t border-secondary text-sm"
+                                  class="flex items-center gap-1.5 px-3 py-2 border-t border-divider text-sm"
                                   data-role="outcome"
                                 >
                                   <Iconify.iconify icon="ph:sparkle-duotone" class="h-4 w-4 shrink-0 text-primary/80" />
@@ -402,7 +402,7 @@
                               else: "/login"}
                             target={if embed_cta?(@showing_within, @__context__), do: "_blank"}
                             rel={if embed_cta?(@showing_within, @__context__), do: "noopener"}
-                            class="btn btn-sm btn-ghost border border-secondary"
+                            class="btn btn-sm btn-ghost border border-divider"
                             data-role="sign-in-to-vote"
                           >
                             {l("Sign in to vote")}
@@ -438,7 +438,7 @@
                         {#if not has_voted}
                           {#if locked}
                             <span
-                              class="text-sm text-base-content/40 cursor-not-allowed"
+                              class="text-sm text-subtle cursor-not-allowed"
                               title={l("Results hidden until poll closes.")}
                               data-role="results-toggle-locked"
                             >
