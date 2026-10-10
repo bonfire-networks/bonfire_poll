@@ -98,8 +98,8 @@
                 <div
                   class={[
                     "inline-flex items-center justify-center rounded-md",
-                    "min-w-[28px] h-7 px-1": @compact,
-                    "min-w-[32px] h-8 px-1": !@compact,
+                    "min-w-7 h-7 px-1": @compact,
+                    "min-w-8 h-8 px-1": !@compact,
                     "opacity-25": i != @selected,
                     "opacity-100 bg-base-content/[0.06]": i == @selected
                   ]}
@@ -111,7 +111,7 @@
                   <Iconify.iconify
                     icon={icon}
                     class={[
-                      "h-5 w-5",
+                      "size-5",
                       if(i == "∞",
                         do: "text-muted",
                         else: score_color_class(i)
@@ -139,14 +139,14 @@
                   title={"#{name}: #{description}"}
                   class={[
                     "group relative inline-flex items-center justify-center cursor-pointer rounded-selector transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
-                    "min-w-[36px] min-h-[36px] px-1": @compact,
-                    "min-w-[40px] min-h-[40px] px-1.5": !@compact
+                    "min-w-9 min-h-9 px-1": @compact,
+                    "min-w-10 min-h-10 px-1.5": !@compact
                   ]}
                 >
                   <Iconify.iconify
                     icon={icon}
                     class={[
-                      "transition group-hover:opacity-90 group-aria-checked:opacity-100 group-aria-checked:scale-110 h-5 w-5",
+                      "transition group-hover:opacity-90 group-aria-checked:opacity-100 group-aria-checked:scale-110 size-5",
                       if(i == "∞",
                         do: "text-base-content group-aria-checked:text-error",
                         else: score_color_class(i)
@@ -162,7 +162,7 @@
   {#match "multiple"}
     <div id={vote_dom_id(@id_prefix, "vote-input", id(@choice) || "noid")} phx-update="ignore">
       <label class={[
-        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-[44px] transition",
+        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-11 transition",
         "hover:bg-primary/10": !@readonly,
         "cursor-default": @readonly
       ]}>
@@ -180,7 +180,7 @@
   {#match "single"}
     <div id={vote_dom_id(@id_prefix, "vote-input", id(@choice) || "noid")} phx-update="ignore">
       <label class={[
-        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-[44px] transition",
+        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-11 transition",
         "hover:bg-primary/10": !@readonly,
         "cursor-default": @readonly
       ]}>

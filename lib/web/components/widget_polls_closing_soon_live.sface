@@ -103,8 +103,8 @@
                                 user_id={id(creator)}
                                 src={creator_avatar(creator)}
                                 title={creator_name(creator)}
-                                class="rounded-full w-7 h-7"
-                                fallback_class="w-4 h-4 opacity-30 mx-auto"
+                                class="rounded-full size-7"
+                                fallback_class="size-4 opacity-30 mx-auto"
                               />
                             </LinkLive>
                             <div class="flex items-baseline gap-1 min-w-0 text-base">

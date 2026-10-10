@@ -104,7 +104,7 @@
              `proposal_dates` persists past the phase end, so the bare check
              would keep blocking voting after suggestions close. --}
             {#if proposal_open}
-              <div class="mt-content">
+              <div class="mt-3">
                 <div class="flex items-center gap-2 px-3 py-2 border-b border-divider text-sm text-muted">
                   <Iconify.iconify icon="ph:lightbulb-duotone" class="size-4 shrink-0" />
                   <span class="font-medium text-base-content">{l("Proposal phase")}</span>
@@ -169,7 +169,7 @@
             {#elseif e(@object, :voting_dates, nil) != false}
               <form
                 id={"vote-form-#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}-#{id(@object)}"}
-                class="mt-content"
+                class="mt-3"
                 phx-submit="Bonfire.Poll:submit_vote"
                 phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
                 x-data="{ hasSelection: false }"
@@ -185,7 +185,7 @@
                       {#match kind_label}
                         <div
                           data-role="poll-status-band"
-                          class="flex flex-wrap items-center gap-0 gap-y-1.5 px-card py-content border-divider border-b-hair text-base"
+                          class="flex flex-wrap items-center gap-0 gap-y-1.5 px-card py-3 border-divider border-b-hair text-base"
                         >
                           {!-- Kind + state as outline pills on the left (Figma): the
                            kind names the process (primary outline), the state pill
@@ -202,7 +202,7 @@
                             ]}
                             data-role="poll-state-label"
                           >
-                            <span class="h-2 w-2 rounded-full bg-current" aria-hidden="true" />
+                            <span class="size-2 rounded-full bg-current" aria-hidden="true" />
                             {state_label(state, voting_format)}
                           </span>
 
@@ -221,7 +221,7 @@
                             {/if}
                             {#if @is_remote}
                               <span class="inline-flex items-center gap-1">
-                                <Iconify.iconify icon="ph:globe-simple" class="h-3 w-3" />
+                                <Iconify.iconify icon="ph:globe-simple" class="size-3" />
                                 {l("Federated")}
                               </span>
                             {/if}
@@ -251,7 +251,7 @@
                         x-on:click.stop
                       >
                         <summary class="flex items-center gap-2 px-3 py-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm text-muted hover:text-base-content select-none">
-                          <Iconify.iconify icon="ph:info-duotone" class="h-4 w-4 shrink-0 text-muted" />
+                          <Iconify.iconify icon="ph:info-duotone" class="size-4 shrink-0 text-muted" />
                           <span class="text-base-content font-medium">{l("How this is decided")}</span>
                           <Iconify.iconify
                             icon="carbon:chevron-down"
@@ -271,7 +271,7 @@
                     <div
                       class={[
                         "flex flex-col divide-divider divide-hair",
-                        "py-half": @viewing_main_object
+                        "py-2": @viewing_main_object
                       ]}
                       data-role="choices"
                     >
@@ -364,7 +364,7 @@
                             class="flex items-center gap-2 px-3 py-2.5 border-t border-divider text-sm text-muted"
                             data-role="outcome"
                           >
-                            <Iconify.iconify icon="ph:lock-key" class="h-4 w-4 shrink-0" />
+                            <Iconify.iconify icon="ph:lock-key" class="size-4 shrink-0" />
                             <span>{l("Closed with no votes.")}</span>
                           </div>
                         {#match _}
@@ -379,7 +379,7 @@
                                   class="flex items-center gap-1.5 px-3 py-2 border-t border-divider text-sm"
                                   data-role="outcome"
                                 >
-                                  <Iconify.iconify icon="ph:sparkle-duotone" class="h-4 w-4 shrink-0 text-primary/80" />
+                                  <Iconify.iconify icon="ph:sparkle-duotone" class="size-4 shrink-0 text-primary/80" />
                                   <span class="text-muted">{if length(winning_ids) > 1, do: l("Tied"), else: l("Top pick")}:</span>
                                   <span class="font-medium text-base-content truncate">{names}</span>
                                   {#case winning_percent(voting_format, counts_by_choice_id, winning_ids, total_votes, voter_count)}
@@ -416,7 +416,7 @@
                             class="inline-flex items-center gap-1.5 text-sm text-primary font-medium motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100"
                             data-role="voted-indicator"
                           >
-                            <Iconify.iconify icon="ph:check-circle-fill" class="h-4 w-4" />
+                            <Iconify.iconify icon="ph:check-circle-fill" class="size-4" />
                             {l("Voted")}
                           </span>
                         {#else}
