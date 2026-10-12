@@ -128,11 +128,7 @@
                 </div>
 
                 {!-- share bar: sweeps 0→pct on mount; reduced-motion starts at target --}
-                <div
-                  class="mt-3 h-2 rounded-full bg-base-200 overflow-hidden"
-                  role="img"
-                  aria-label={"#{pct}%"}
-                >
+                <div class="mt-3 h-2 rounded-full bg-base-200 overflow-hidden" role="img" aria-label={"#{pct}%"}>
                   <div
                     aria-hidden="true"
                     x-data={"{ w: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? #{pct} : 0 }"}

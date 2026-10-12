@@ -245,11 +245,7 @@
 
                     {!-- Thread-only: the process rules, made legible on demand. --}
                     {#if @viewing_main_object and voting_format == "weighted_multiple"}
-                      <details
-                        class="border-b-hair border-divider bg-base-200"
-                        data-role="how-decided"
-                        x-on:click.stop
-                      >
+                      <details class="border-b-hair border-divider bg-base-200" data-role="how-decided" x-on:click.stop>
                         <summary class="flex items-center gap-2 px-3 py-2 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-sm text-muted hover:text-base-content select-none">
                           <Iconify.iconify icon="ph:info-duotone" class="size-4 shrink-0 text-muted" />
                           <span class="text-base-content font-medium">{l("How this is decided")}</span>

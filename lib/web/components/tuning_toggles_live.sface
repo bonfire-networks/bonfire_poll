@@ -33,11 +33,7 @@
                 <option value={hours} selected={@proposal_duration_hours == hours}>{label}</option>
               {/for}
             </select>
-            <Iconify.iconify
-              icon="ph:arrow-right"
-              class="size-4 text-subtle shrink-0"
-              aria-hidden="true"
-            />
+            <Iconify.iconify icon="ph:arrow-right" class="size-4 text-subtle shrink-0" aria-hidden="true" />
             <select
               name="duration_hours"
               data-role="poll-duration"
