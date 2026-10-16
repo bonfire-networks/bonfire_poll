@@ -781,7 +781,7 @@ defmodule Bonfire.Poll.Votes do
       when is_binary(option_name) and is_in(type, ["Answer", "Note"]) do
     # Find local question by URI
     with {:ok, question} <-
-           Questions.get_by_uri(question_uri, current_user: creator, verbs: [:vote]),
+           Questions.get_by_uri(question_uri, current_user: creator, verbs: [:read, :vote]),
          {:ok, choice} <- Choices.find_choice_by_name(question, option_name) do
       # Record vote (`vote/4` takes a list of `%{choice_id: _}` maps)
       vote(creator, question, [%{choice_id: id(choice)}], [])

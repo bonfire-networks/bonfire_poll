@@ -469,6 +469,20 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
     end
   end
 
+  describe "ChoiceLive.reaction_strip/1" do
+    test "keeps every bucket in scale order, empty ones as 0, so the spectrum stays readable" do
+      strip = C.reaction_strip(%{2 => 3, -1 => 2, nil => 1})
+
+      assert Enum.map(strip, fn {value, _n, _i, _c, count} -> {value, count} end) ==
+               [{-2, 0}, {-1, 2}, {0, 0}, {1, 0}, {2, 3}, {"∞", 1}]
+    end
+
+    test "an option nobody reacted to still shows the whole scale at 0" do
+      assert Enum.map(C.reaction_strip(%{}), &elem(&1, 4)) == [0, 0, 0, 0, 0, 0]
+      assert C.reaction_strip(nil) == C.reaction_strip(%{})
+    end
+  end
+
   describe "QuestionLive consent winner (consent_net via winning_ids/5)" do
     test "a Block bucket does not lower an option's net agreement" do
       a = choice(id: "A")

@@ -213,12 +213,27 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
       [{2, "Great", "ph:smiley-wink-fill", "text-success", 3}, {"∞", "Block", "ph:prohibit-fill", "text-error", 1}]
   """
   def reaction_chips(histogram) when is_map(histogram) do
-    @chip_order
-    |> Enum.map(&histogram_segment(histogram, &1))
+    histogram
+    |> reaction_strip()
     |> Enum.filter(fn {_v, _n, _i, _c, count} -> count > 0 end)
   end
 
   def reaction_chips(_), do: []
+
+  @doc """
+  Every reaction bucket, empty ones included, ordered Disagree → Agree → Block,
+  as `histogram_segment/2` tuples. The feed card shows the whole scale so each
+  option's spread reads at a glance, with empty buckets kept in place.
+
+  ## Examples
+
+      iex> Bonfire.Poll.Web.Preview.ChoiceLive.reaction_strip(%{2 => 3}) |> Enum.map(&elem(&1, 4))
+      [0, 0, 0, 0, 3, 0]
+  """
+  def reaction_strip(histogram) when is_map(histogram),
+    do: Enum.map(@chip_order, &histogram_segment(histogram, &1))
+
+  def reaction_strip(_), do: reaction_strip(%{})
 
   @doc """
   True when the viewer's own reaction falls on the given side of the diverging

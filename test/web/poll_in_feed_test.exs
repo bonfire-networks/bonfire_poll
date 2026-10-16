@@ -40,7 +40,62 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     |> assert_has_or_open_browser("[data-id=feed]", text: question_text)
     |> assert_has_or_open_browser("[data-id=activity_choice]", text: "yes")
     |> assert_has_or_open_browser("[data-id=activity_choice]", text: "no")
+
+    # debug leftover: opened a browser on every run, and assert_has_or_open_browser already opens one on failure
+    # |> PhoenixTest.open_browser()
+  end
+
+  test "consent results in the feed show each option's whole reaction spectrum, not a bare count" do
+    account = Fake.fake_account!()
+    user = Fake.fake_user!(account)
+    conn = conn(user: user, account: account)
+
+    {:ok, question} =
+      fake_question_with_choices(
+        %{
+          post_content: %{html_body: "Consent spectrum in feed"},
+          voting_format: "weighted_multiple",
+          voting_dates: [DateTime.utc_now()]
+        },
+        [%{name: "alpha"}, %{name: "beta"}],
+        current_user: user,
+        boundary: "public"
+      )
+
+    [alpha, beta] = question.choices
+
+    # Everyone reacts to both options, so both get the same count (3): only the
+    # spread tells them apart.
+    for {voter, alpha_weight, beta_weight} <- [
+          {user, 2, -2},
+          {Fake.fake_user!(), 2, -1},
+          {Fake.fake_user!(), 1, "∞"}
+        ] do
+      assert {:ok, _} =
+               Bonfire.Poll.Votes.vote(voter, question, [
+                 %{choice_id: alpha.id, weight: alpha_weight},
+                 %{choice_id: beta.id, weight: beta_weight}
+               ])
+    end
+
+    # alpha only drew agreement and beta only disagreement + Block, so each
+    # non-zero bucket below can only come from one option's strip.
+    conn
+    |> visit("/feed")
+    |> wait_async()
+    # TEMP: preview the new result design, remove before commit
     |> PhoenixTest.open_browser()
+    |> refute_has("[data-role=choice-participation]")
+    |> assert_has("[data-role=reaction-strip]", count: 2)
+    # alpha
+    |> assert_has_or_open_browser("[data-role=reaction-strip] [data-bucket='2'][data-count='2']")
+    |> assert_has_or_open_browser("[data-role=reaction-strip] [data-bucket='1'][data-count='1']")
+    # beta
+    |> assert_has_or_open_browser("[data-role=reaction-strip] [data-bucket='-2'][data-count='1']")
+    |> assert_has_or_open_browser("[data-role=reaction-strip] [data-bucket='-1'][data-count='1']")
+    |> assert_has_or_open_browser("[data-role=reaction-strip] [data-bucket='∞'][data-count='1']")
+    # empty buckets stay on the scale: nobody was neutral on either option
+    |> assert_has("[data-role=reaction-strip] [data-bucket='0'][data-count='0']", count: 2)
   end
 
   test "the same poll renders its options at its permalink (discussion view)" do

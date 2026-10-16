@@ -79,8 +79,13 @@ defmodule Bonfire.Poll.Questions do
 
   def read(post_id, opts_or_socket_or_current_user \\ [])
       when is_binary(post_id) do
-    query([id: post_id], opts_or_socket_or_current_user)
-    |> Objects.read(opts_or_socket_or_current_user)
+    # one object is OPENED, so `[:read]` unless the caller asks for more (a vote asks `[:read, :vote]`). Checked once, in `query/2`, as `Posts.read/2` does: `query/2` alone would check the listing default, and `Objects.read` then `[:read]` again
+    opts =
+      to_options(opts_or_socket_or_current_user)
+      |> Keyword.put_new(:verbs, [:read])
+
+    query([id: post_id], opts)
+    |> Objects.read(Keyword.put(opts, :skip_boundary_check, true))
     |> repo().maybe_preload(choices: [:post_content])
   end
 

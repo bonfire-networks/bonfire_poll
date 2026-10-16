@@ -57,10 +57,36 @@
 
               {!-- No AGREED / BLOCKED verdict pill for group decisions — just the
                    reaction count. The group interprets the results. --}
-              <div class="shrink-0 flex items-center gap-2">
-                <span class="text-base text-base-content tabular-nums" data-role="choice-participation">({@vote_count})</span>
-              </div>
+              {#if @viewing_main_object}
+                <div class="shrink-0 flex items-center gap-2">
+                  <span class="text-base text-base-content tabular-nums" data-role="choice-participation">({@vote_count})</span>
+                </div>
+              {/if}
             </div>
+
+            {!-- Feed: the whole scale as face + count, empty buckets dimmed, Block
+                 set apart. The reaction count alone is the same on every option
+                 (everyone reacts to each), so it tells the reader nothing here. --}
+            {#if not @viewing_main_object}
+              <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums" data-role="reaction-strip">
+                {#for {value, name, icon, color, count} <- reaction_strip(@score_histogram)}
+                  {#if value == "∞"}
+                    <span class="ml-auto h-4 border-l border-divider" aria-hidden="true" />
+                  {/if}
+                  <span
+                    class={["inline-flex items-center gap-1", "opacity-40": count == 0]}
+                    title={name}
+                    data-role="reaction-strip-bucket"
+                    data-bucket={"#{value}"}
+                    data-count={count}
+                  >
+                    <Iconify.iconify icon={icon} class={["size-4", color]} aria-hidden="true" />
+                    <span class="sr-only">{name}</span>
+                    <span class="text-base-content">{count}</span>
+                  </span>
+                {/for}
+              </div>
+            {/if}
 
             {!-- Thread only: the reaction spread as calm chips (Disagree → Agree →
                  Block), the viewer's own bucket ringed — keeps the whole card in
