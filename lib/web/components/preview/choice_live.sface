@@ -68,7 +68,10 @@
                  set apart. The reaction count alone is the same on every option
                  (everyone reacts to each), so it tells the reader nothing here. --}
             {#if not @viewing_main_object}
-              <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums" data-role="reaction-strip">
+              <div
+                class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums"
+                data-role="reaction-strip"
+              >
                 {#for {value, name, icon, color, count} <- reaction_strip(@score_histogram)}
                   {#if value == "∞"}
                     <span class="ml-auto h-4 border-l border-divider" aria-hidden="true" />

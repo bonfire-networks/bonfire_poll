@@ -73,7 +73,8 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
 
       choices =
         Map.new(poll_result["choices"], fn choice ->
-          {get_in(choice, ["post_content", "name"]), {choice["votes_result_total"], choice["votes_result_average"]}}
+          {get_in(choice, ["post_content", "name"]),
+           {choice["votes_result_total"], choice["votes_result_average"]}}
         end)
 
       {poll_result["votes_count"], poll_result["voters_count"], choices}
@@ -91,14 +92,18 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                )
 
       [a, b, c] = poll.choices
-      pick = fn voter, choices -> Votes.vote(voter, poll, Enum.map(choices, &%{choice_id: &1.id, weight: 1})) end
+
+      pick = fn voter, choices ->
+        Votes.vote(voter, poll, Enum.map(choices, &%{choice_id: &1.id, weight: 1}))
+      end
 
       assert {:ok, _} = pick.(v1, [a, b])
       assert {:ok, _} = pick.(v2, [a, c])
       assert {:ok, _} = pick.(v3, [a])
       assert {:ok, _} = pick.(v4, [b, c])
 
-      assert {7, 4, %{"A" => {3, nil}, "B" => {2, nil}, "C" => {2, nil}}} = poll_results(poll, author)
+      assert {7, 4, %{"A" => {3, nil}, "B" => {2, nil}, "C" => {2, nil}}} =
+               poll_results(poll, author)
     end
 
     test "weighted poll results scale negatives by weighting, floor at 0, and leave Block out of the score" do
@@ -113,7 +118,14 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
                )
 
       [a, b, c, d] = poll.choices
-      react = fn voter, reactions -> Votes.vote(voter, poll, Enum.map(reactions, fn {choice, weight} -> %{choice_id: choice.id, weight: weight} end)) end
+
+      react = fn voter, reactions ->
+        Votes.vote(
+          voter,
+          poll,
+          Enum.map(reactions, fn {choice, weight} -> %{choice_id: choice.id, weight: weight} end)
+        )
+      end
 
       assert {:ok, _} = react.(p1, [{a, 2}, {b, 2}])
       assert {:ok, _} = react.(p2, [{a, 2}, {b, 2}])

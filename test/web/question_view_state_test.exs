@@ -56,7 +56,10 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
       )
 
     [a, b, c] = question.choices
-    pick = fn voter, choices -> Votes.vote(voter, question, Enum.map(choices, &%{choice_id: &1.id, weight: 1})) end
+
+    pick = fn voter, choices ->
+      Votes.vote(voter, question, Enum.map(choices, &%{choice_id: &1.id, weight: 1}))
+    end
 
     assert {:ok, _} = pick.(v1, [a, b])
     assert {:ok, _} = pick.(v2, [a, c])
@@ -71,7 +74,13 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
     assert state.voter_count == 4
     assert state.winning_ids == [a.id]
 
-    assert Q.winning_percent("multiple", state.counts_by_choice_id, state.winning_ids, state.total_votes, state.voter_count) ==
+    assert Q.winning_percent(
+             "multiple",
+             state.counts_by_choice_id,
+             state.winning_ids,
+             state.total_votes,
+             state.voter_count
+           ) ==
              75
 
     # A 5th voter brings B level with A: both win
@@ -84,7 +93,13 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
     assert state.voter_count == 5
     assert state.winning_ids == [a.id, b.id]
 
-    assert Q.winning_percent("multiple", state.counts_by_choice_id, state.winning_ids, state.total_votes, state.voter_count) ==
+    assert Q.winning_percent(
+             "multiple",
+             state.counts_by_choice_id,
+             state.winning_ids,
+             state.total_votes,
+             state.voter_count
+           ) ==
              60
   end
 
@@ -101,7 +116,14 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
 
     assert question.weighting == 3
     [a, b, c, d] = question.choices
-    react = fn voter, reactions -> Votes.vote(voter, question, Enum.map(reactions, fn {choice, weight} -> %{choice_id: choice.id, weight: weight} end)) end
+
+    react = fn voter, reactions ->
+      Votes.vote(
+        voter,
+        question,
+        Enum.map(reactions, fn {choice, weight} -> %{choice_id: choice.id, weight: weight} end)
+      )
+    end
 
     assert {:ok, _} = react.(p1, [{a, 2}, {b, 2}])
     assert {:ok, _} = react.(p2, [{a, 2}, {b, 2}])
