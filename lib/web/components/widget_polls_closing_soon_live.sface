@@ -23,36 +23,16 @@
                 {l("View all")}
               </LinkLive>
 
-              <div :if={length(polls) > 1 && socket_connected?(@__context__)} class="flex items-center gap-1.5">
-                <.icon_button
-                  icon="carbon:chevron-left"
-                  aria_label={l("Scroll left")}
-                  variant="outline"
-                  size="sm"
-                  class="border-transparent bg-transparent text-muted hover:text-base-content"
-                  data-carousel-scroll="previous"
-                  aria-controls="polls-closing-soon-carousel"
-                />
-                <.icon_button
-                  icon="carbon:chevron-right"
-                  aria_label={l("Scroll right")}
-                  variant="outline"
-                  size="sm"
-                  class="border-transparent bg-transparent text-muted hover:text-base-content"
-                  data-carousel-scroll="next"
-                  aria-controls="polls-closing-soon-carousel"
-                />
-              </div>
+              <Bonfire.UI.Common.CarouselArrowsLive track="polls-closing-soon-carousel" count={length(polls)} />
             </div>
           </:action>
 
-          <div class="grid grid-cols-1 overflow-hidden">
-            <div
-              id="polls-closing-soon-carousel"
-              class="carousel-scroll items-start scroll-pl-card pb-2"
-              phx-hook="CarouselScroll"
-            >
-              {#for poll <- polls}
+          <Bonfire.UI.Common.CarouselLive
+            id="polls-closing-soon-carousel"
+            items={polls}
+            class="scroll-pl-card pb-2"
+          >
+            <:card :let={item: poll}>
                 {!-- `px-4` compensates for the preview's own `-mx-4` so its
                      full-width status band aligns to the card edges.
 
@@ -71,7 +51,7 @@
                       data-role="poll_card"
                       phx-hook="Bonfire.UI.Common.PreviewContentLive#PreviewActivity"
                       tabIndex="0"
-                      class="rounded-box border-hair border-divider bg-base-100 overflow-hidden px-4 py-3 pb-0 cursor-pointer w-[calc(85%-8px)]"
+                      class="h-full rounded-box border-hair border-divider bg-base-100 overflow-hidden px-4 py-3 pb-0 cursor-pointer"
                     >
                       <Bonfire.UI.Common.OpenPreviewLive
                         :if={permalink}
@@ -123,9 +103,8 @@
                       <QuestionLive object={poll} vote_state={vote_state} />
                     </div>
                 {/case}
-              {/for}
-            </div>
-          </div>
+            </:card>
+          </Bonfire.UI.Common.CarouselLive>
         </Bonfire.UI.Common.WidgetBlockLive>
     {/case}
 {/case}

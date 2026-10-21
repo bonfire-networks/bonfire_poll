@@ -1,8 +1,8 @@
 defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
   @moduledoc """
   Dashboard widget showing open polls ordered by closing time (soonest
-  first), laid out as a horizontal snap carousel (same pattern as the
-  "Spotlight" and "Who to follow" widgets). Each poll renders as the full
+  first), in the shared carousel (`Bonfire.UI.Common.CarouselLive`), as the
+  "Spotlight" and "Who to follow" widgets are. Each poll renders as the full
   standard poll preview (`Bonfire.Poll.Web.Preview.QuestionLive`) — the same
   component feeds use — so the status band, options, tallies and inline voting
   all match the rest of the app. The default limit is 3; pass `limit={N}` to
