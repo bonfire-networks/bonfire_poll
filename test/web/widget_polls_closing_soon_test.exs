@@ -24,7 +24,10 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonTest do
         fake_question(
           %{
             post_content: %{name: "Closing in #{hours}h"},
-            voting_dates: [DateTime.add(now, -60, :second), DateTime.add(now, hours * 3600, :second)]
+            voting_dates: [
+              DateTime.add(now, -60, :second),
+              DateTime.add(now, hours * 3600, :second)
+            ]
           },
           current_user: user,
           boundary: "public"
@@ -35,7 +38,12 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonTest do
 
     doc = render_widget(user) |> Floki.parse_document!()
 
-    assert length(Floki.find(doc, "#polls-closing-soon-carousel [data-carousel-card] [data-role=poll_card]")) == 2
+    assert length(
+             Floki.find(
+               doc,
+               "#polls-closing-soon-carousel [data-carousel-card] [data-role=poll_card]"
+             )
+           ) == 2
 
     assert Floki.attribute(doc, "[data-role=carousel_dots]", "data-carousel-dots") ==
              ["polls-closing-soon-carousel"]

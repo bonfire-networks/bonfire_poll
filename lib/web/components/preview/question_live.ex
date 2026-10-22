@@ -40,6 +40,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   # in embeds (`InstancePinsLive` sets `link_target` "_blank") pins render as `:widget`
   defp embed_cta?(:widget, context),
     do: e(context, :link_target, nil) == "_blank"
+
   defp embed_cta?(_, _), do: false
 
   def preloads(),
