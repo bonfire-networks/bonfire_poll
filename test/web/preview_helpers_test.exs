@@ -19,6 +19,7 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
   # Pure consent-histogram helpers (segments, bucketing, viewer marking) and
   # the batched read-model's 3-level histogram reducer.
   doctest Bonfire.Poll.Web.Preview.ChoiceLive, import: true
+  doctest Bonfire.Poll.VotingLive, only: [reaction_groups: 1], import: true
   doctest Bonfire.Poll.Votes, only: [put_nested_histogram: 5], import: true
   # Pure winning-share helper for the single/tally outcome caption.
   doctest Bonfire.Poll.Web.Preview.QuestionLive,
@@ -407,78 +408,20 @@ defmodule Bonfire.Poll.Web.Preview.HelpersTest do
     end
   end
 
-  describe "ChoiceLive.consent_distribution/1 (math & invariants)" do
-    test "all six buckets with large counts: larger side fills 100%, both pcts in 0..100" do
-      # neg = -2(7) + -1(13) = 20 ; pos = 1(40) + 2(60) = 100
-      d = C.consent_distribution(%{-2 => 7, -1 => 13, 0 => 5, 1 => 40, 2 => 60, nil => 3})
-
-      assert d.neg_count == 20
-      assert d.pos_count == 100
-      assert d.neutral_count == 5
-      assert d.block_count == 3
-      assert d.total == 128
-      # pos is the larger side → fills its half; neg scaled to it: round(20*100/100)
-      assert d.pos_pct == 100
-      assert d.neg_pct == 20
-      assert d.neg_pct in 0..100
-      assert d.pos_pct in 0..100
-    end
-
-    test "side_pct rounds to the nearest integer" do
-      # max_side = 3 → neg_pct = round(1*100/3) = 33
-      d = C.consent_distribution(%{-1 => 1, 2 => 3})
-      assert d.neg_pct == 33
-      assert d.pos_pct == 100
-    end
-
-    test "no agree/disagree signal → both fills are 0%" do
-      d = C.consent_distribution(%{0 => 4, nil => 2})
-      assert d.neg_pct == 0
-      assert d.pos_pct == 0
-      assert d.neutral_count == 4
-      assert d.block_count == 2
-    end
-
-    test "total always equals the sum of all buckets (incl. empty)" do
-      for hist <- [
-            %{},
-            %{2 => 5},
-            %{-2 => 1, 0 => 2, nil => 3},
-            %{-2 => 7, -1 => 13, 0 => 5, 1 => 40, 2 => 60, nil => 3}
-          ] do
-        d = C.consent_distribution(hist)
-        assert d.total == hist |> Map.values() |> Enum.sum()
-      end
-    end
-
-    test "the larger non-zero side always fills 100% and pcts stay in 0..100" do
-      for hist <- [%{2 => 5}, %{-2 => 1, 2 => 3}, %{-1 => 10, 1 => 10}, %{-2 => 7, 2 => 60}] do
-        d = C.consent_distribution(hist)
-        assert d.neg_pct in 0..100
-        assert d.pos_pct in 0..100
-        if max(d.neg_count, d.pos_count) > 0, do: assert(100 in [d.neg_pct, d.pos_pct])
-      end
-    end
-  end
-
-  describe "ChoiceLive.reaction_chips/1 ordering" do
-    test "orders Disagree → Agree → Block, with the Block bucket shown as the ∞ score" do
-      hist = %{2 => 1, -2 => 1, nil => 1, 0 => 1, -1 => 1, 1 => 1}
-      values = C.reaction_chips(hist) |> Enum.map(fn {value, _n, _i, _c, _count} -> value end)
-      assert values == [-2, -1, 0, 1, 2, "∞"]
-    end
-  end
-
   describe "ChoiceLive.reaction_strip/1" do
     test "keeps every bucket in scale order, empty ones as 0, so the spectrum stays readable" do
-      strip = C.reaction_strip(%{2 => 3, -1 => 2, nil => 1})
+      {scale, block} = C.reaction_strip(%{2 => 3, -1 => 2, nil => 1})
 
-      assert Enum.map(strip, fn {value, _n, _i, _c, count} -> {value, count} end) ==
-               [{-2, 0}, {-1, 2}, {0, 0}, {1, 0}, {2, 3}, {"∞", 1}]
+      assert Enum.map(scale, fn {value, _n, _i, count} -> {value, count} end) ==
+               [{-2, 0}, {-1, 2}, {0, 0}, {1, 0}, {2, 3}]
+
+      assert {"∞", _name, _icon, 1} = block
     end
 
     test "an option nobody reacted to still shows the whole scale at 0" do
-      assert Enum.map(C.reaction_strip(%{}), &elem(&1, 4)) == [0, 0, 0, 0, 0, 0]
+      {scale, block} = C.reaction_strip(%{})
+      assert Enum.map(scale, &elem(&1, 3)) == [0, 0, 0, 0, 0]
+      assert elem(block, 3) == 0
       assert C.reaction_strip(nil) == C.reaction_strip(%{})
     end
   end

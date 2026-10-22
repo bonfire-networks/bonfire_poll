@@ -18,6 +18,7 @@ div[data-id="object_body"][data-rendered="smart_input"] {
   @apply !my-0 !text-sm !font-normal;
 }
 
+/* Size comes from the --poll-question-* tokens, in the thread too. */
 div[data-id="object_body"][data-main-object] {
-  @apply md:prose-base md:prose-p:my-0;
+  @apply md:prose-p:my-0;
 }

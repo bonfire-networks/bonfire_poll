@@ -14,16 +14,17 @@
           phx-update="ignore"
           x-data="{
         selectedLabel: null,
-        selectedDesc: null,
-        selectedColor: null,
+        selectedTone: null,
         reduce: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
         lastPulsedScore: null,
+        // Runs on `poll:reacted`, which `choose_weight_js` fires after it flips
+        // aria-checked: a click listener here would run before that and see the
+        // previous pick.
         refresh() {
           const checked = $el.querySelector('button[role=radio][aria-checked=true]');
           if (checked) {
             this.selectedLabel = checked.dataset.label;
-            this.selectedDesc = checked.dataset.description;
-            this.selectedColor = checked.dataset.colorClass || 'text-base-content';
+            this.selectedTone = checked.style.getPropertyValue('--tone');
             // Briefly pulse the chosen icon when the selection changes
             // (skip if reduce-motion or if it's the same score already selected).
             if (!this.reduce && this.lastPulsedScore !== checked.dataset.score) {
@@ -54,17 +55,12 @@
         }
       }"
           x-init="refresh()"
-          x-on:click="refresh()"
+          x-on:poll:reacted="refresh()"
           x-on:keydown.right.prevent="moveFocus(1)"
           x-on:keydown.left.prevent="moveFocus(-1)"
           x-on:keydown.down.prevent="moveFocus(1)"
           x-on:keydown.up.prevent="moveFocus(-1)"
-          class={[
-            "flex flex-col items-end gap-1",
-            "border-t border-divider px-3 py-1.5": @compact and !@inline,
-            "border-t border-divider px-3 py-2": !@compact and !@inline,
-            "shrink-0": @inline
-          ]}
+          class="group/react flex w-full items-stretch gap-1.5"
         >
           <legend class="sr-only">{l("Your reaction to this choice")}</legend>
           <input
@@ -74,52 +70,34 @@
             value={chosen_value(@selected)}
           />
 
-          {!-- Inline selected-state callout: replaces the per-button text labels
-           that used to repeat 6× under every choice. Right-aligned to sit
-           visually above the face strip. Shown only after a pick. --}
+          {!-- The picked reaction, named in its tone at the row's top right
+           (the decision row is `relative`; from `sm` the row has no padding),
+           so nobody has to decode faces.
+           Empty until a pick. --}
           <div
-            :if={!@readonly}
-            x-show="selectedLabel !== null"
-            x-cloak
             data-role="vote-selected-callout"
-            class="flex items-baseline justify-end gap-1.5 text-xs max-w-full"
-          >
-            <span class="font-medium whitespace-nowrap" :class="selectedColor" x-text="selectedLabel" />
-            <span class="text-base-content truncate hidden sm:inline" x-text="selectedDesc" />
-          </div>
+            class="poll-tone-text absolute top-2.5 right-3.5 text-[13px]/[18px] font-medium whitespace-nowrap sm:top-1 sm:right-0"
+            :style="`--tone: ${selectedTone}`"
+            x-text="selectedLabel"
+          />
 
-          <div class={[
-            "flex items-center justify-end",
-            "gap-0.5": @compact,
-            "gap-1 sm:gap-1.5": !@compact
-          ]}>
-            {#for {i, name, icon, description} <- scores_or_default(@scores)}
-              {#if @readonly}
-                <div
-                  class={[
-                    "inline-flex items-center justify-center rounded-md",
-                    "min-w-7 h-7 px-1": @compact,
-                    "min-w-8 h-8 px-1": !@compact,
-                    "opacity-25": i != @selected,
-                    "opacity-100 bg-base-content/[0.06]": i == @selected
-                  ]}
-                  data-role="vote-score"
-                  data-score={"#{i}"}
-                  aria-current={i == @selected && "true"}
-                  title={"#{name}: #{description}"}
-                >
-                  <Iconify.iconify
-                    icon={icon}
-                    class={[
-                      "size-5",
-                      if(i == "∞",
-                        do: "text-muted",
-                        else: score_color_class(i)
-                      )
-                    ]}
-                  />
-                </div>
-              {#else}
+          {!-- The five-step scale shares one track and stays monochrome until a
+           pick; Block sits apart on its own (see `reaction_groups/1`), and
+           while it's on the scale dims. Each face and Block names itself in a
+           daisyUI tooltip on hover and focus, since faces alone don't say which
+           is which; the full description stays in `aria-label`. The track fills the row and Block
+           stretches to the track's height so the two line up. Cells are 36px
+           for touch and 32px for a mouse. --}
+          {#for {group, scores} <- reaction_groups(@scores)}
+            <div
+              data-role={if group == :scale, do: "reaction-scale"}
+              class={[
+                "grid flex-1 grid-cols-5 gap-0.5 p-[3px] rounded-field bg-(--poll-track) transition-opacity group-has-[[data-block][aria-checked=true]]/react:opacity-45":
+                  group == :scale,
+                contents: group == :block
+              ]}
+            >
+              {#for {i, name, icon, description} <- scores}
                 {!-- Buttons + aria-checked driven by Phoenix.LiveView.JS, not
                  native radios — LV form-state lifecycle clobbered the user's
                  selection between clicks on native ones. --}
@@ -133,37 +111,36 @@
                   phx-click={choose_weight_js(@id_prefix, choice_id, i)}
                   data-role="vote-score"
                   data-score={"#{i}"}
+                  data-block={group == :block}
                   data-label={name}
-                  data-description={description}
-                  data-color-class={score_color_class(i)}
-                  title={"#{name}: #{description}"}
+                  data-tip={name}
+                  style={"--tone: var(#{score_tone_var(i)})"}
                   class={[
-                    "group relative inline-flex items-center justify-center cursor-pointer rounded-selector transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:bg-base-content/[0.04] aria-checked:bg-primary/10 aria-checked:ring-1 aria-checked:ring-primary/40",
-                    "min-w-9 min-h-9 px-1": @compact,
-                    "min-w-10 min-h-10 px-1.5": !@compact
+                    "tooltip group inline-flex items-center justify-center cursor-pointer text-(--poll-meta) transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 aria-checked:text-(--tone)",
+                    "h-9 pointer-fine:h-8 rounded-[calc(var(--radius-field)-3px)] hover:text-base-content aria-checked:bg-(--poll-cell-raised) aria-checked:shadow-sm":
+                      group == :scale,
+                    "w-10 shrink-0 self-stretch rounded-field bg-(--poll-track) hover:text-(--tone) aria-checked:bg-[color-mix(in_oklab,var(--tone)_16%,transparent)] aria-checked:shadow-[inset_0_0_0_1.5px_var(--tone)]":
+                      group == :block
                   ]}
                 >
                   <Iconify.iconify
                     icon={icon}
-                    class={[
-                      "transition group-hover:opacity-90 group-aria-checked:opacity-100 group-aria-checked:scale-110 size-5",
-                      if(i == "∞",
-                        do: "text-base-content group-aria-checked:text-error",
-                        else: score_color_class(i)
-                      )
-                    ]}
+                    class="size-5 transition group-aria-checked:scale-110"
                   />
                 </button>
-              {/if}
-            {/for}
-          </div>
+              {/for}
+            </div>
+          {/for}
         </fieldset>
     {/case}
   {#match "multiple"}
     <div id={vote_dom_id(@id_prefix, "vote-input", id(@choice) || "noid")} phx-update="ignore">
-      <label class={[
-        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-11 transition",
-        "hover:bg-primary/10": !@readonly,
+      {!-- A field per option, ringed once picked; the indicator stays muted
+           until checked so the accent marks only the choice. Presets restyle it
+           through the --poll-* tokens (app.css). --}
+      <label data-role="vote-option" class={[
+        "poll-option flex items-center gap-3 cursor-pointer transition-[background-color,box-shadow] has-checked:poll-picked",
+        "hover:bg-(--poll-option-bg-hover)": !@readonly,
         "cursor-default": @readonly
       ]}>
         <input
@@ -172,16 +149,19 @@
           value="1"
           checked={!!@selected}
           disabled={@readonly}
-          class="checkbox checkbox-sm checkbox-primary"
+          class="checkbox checkbox-sm checkbox-primary rounded-(--poll-check-radius) not-checked:[--input-color:var(--poll-indicator-idle)]"
         />
         <div class="flex-1 min-w-0"><#slot /></div>
       </label>
     </div>
   {#match "single"}
     <div id={vote_dom_id(@id_prefix, "vote-input", id(@choice) || "noid")} phx-update="ignore">
-      <label class={[
-        "flex items-center gap-3 cursor-pointer rounded-none px-3 py-2.5 min-h-11 transition",
-        "hover:bg-primary/10": !@readonly,
+      {!-- A field per option, ringed once picked; the indicator stays muted
+           until checked so the accent marks only the choice. Presets restyle it
+           through the --poll-* tokens (app.css). --}
+      <label data-role="vote-option" class={[
+        "poll-option flex items-center gap-3 cursor-pointer transition-[background-color,box-shadow] has-checked:poll-picked",
+        "hover:bg-(--poll-option-bg-hover)": !@readonly,
         "cursor-default": @readonly
       ]}>
         <input
@@ -190,7 +170,7 @@
           value={id(@choice)}
           checked={@selected == 1 or @selected == true}
           disabled={@readonly}
-          class="radio radio-sm radio-primary"
+          class="radio radio-sm radio-primary not-checked:[--input-color:var(--poll-indicator-idle)]"
         />
         <div class="flex-1 min-w-0"><#slot /></div>
       </label>

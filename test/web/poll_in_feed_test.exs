@@ -84,7 +84,7 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     |> visit("/feed")
     |> wait_async()
     # TEMP: preview the new result design, remove before commit
-    |> PhoenixTest.open_browser()
+    # |> PhoenixTest.open_browser()
     |> refute_has("[data-role=choice-participation]")
     |> assert_has("[data-role=reaction-strip]", count: 2)
     # alpha

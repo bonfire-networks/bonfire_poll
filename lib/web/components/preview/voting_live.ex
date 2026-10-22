@@ -10,19 +10,37 @@ defmodule Bonfire.Poll.VotingLive do
   prop selected, :any, default: nil
   prop readonly, :boolean, default: false
   prop scores, :list, default: nil
-  prop compact, :boolean, default: false
-  # When true, render without the outer border-t and wrapper padding so the
-  # parent can place the strip on the same row as the choice content.
-  prop inline, :boolean, default: false
   prop index, :integer, default: 0
   prop id_prefix, :string, default: nil
 
   slot default
 
-  defdelegate score_color_class(score), to: Bonfire.Poll.Web.Preview.ChoiceLive
+  defdelegate score_tone_var(score), to: Bonfire.Poll.Web.Preview.ChoiceLive
 
   def scores_or_default(nil), do: Votes.scores()
   def scores_or_default(scores), do: scores
+
+  @doc """
+  Splits the reaction scores into the agreement scale and Block. Block is a veto,
+  not a degree of agreement, so it renders outside the scale's track while
+  staying in the same radiogroup (one value per option).
+
+  ## Examples
+
+      iex> [{:scale, scale}, {:block, block}] = Bonfire.Poll.VotingLive.reaction_groups(nil)
+      iex> Enum.map(scale, &elem(&1, 0))
+      [-2, -1, 0, 1, 2]
+      iex> Enum.map(block, &elem(&1, 0))
+      ["∞"]
+  """
+  def reaction_groups(scores) do
+    {block, scale} =
+      scores
+      |> scores_or_default()
+      |> Enum.split_with(&(elem(&1, 0) == "∞"))
+
+    [{:scale, scale}, {:block, block}]
+  end
 
   # CSS-safe token for a sentiment score, used in element ids (no `-` or `∞`).
   def score_key(-2), do: "neg2"
@@ -32,7 +50,9 @@ defmodule Bonfire.Poll.VotingLive do
   def score_key(2), do: "p2"
   def score_key("∞"), do: "veto"
 
-  @doc "phx-click chain that records the chosen weight + flips aria-checked on its siblings."
+  @doc """
+  phx-click chain that records the chosen weight + flips aria-checked on its siblings, then fires `poll:reacted` (bubbling to the fieldset) so the callout reads the new pick.
+  """
   def choose_weight_js(prefix, choice_id, score) do
     choose_weight_js(
       vote_dom_id(prefix, "vote-input", choice_id),
@@ -46,6 +66,7 @@ defmodule Bonfire.Poll.VotingLive do
     JS.set_attribute({"aria-checked", "false"}, to: "##{fieldset_id} button[role='radio']")
     |> JS.set_attribute({"aria-checked", "true"}, to: "##{button_id}")
     |> JS.set_attribute({"value", "#{score}"}, to: "##{hidden_id}")
+    |> JS.dispatch("poll:reacted")
   end
 
   def chosen_value(false), do: ""

@@ -16,105 +16,97 @@
     >
       {#if @results_visible}
         {#if @voting_format == "weighted_multiple"}
-          {!-- Consent results (Figma "consent decision voted"): name-first row,
-               the viewer's own reaction below it, then a trailing reaction count
-               and an AGREED / BLOCKED outline pill for the outcome. No share bar
-               and no percentage — everyone reacts to every option, so a % of
-               reactions would be meaningless. The reaction spread shows as calm
-               chips in the expanded thread view only. --}
-          <div data-role="consent-result" class="px-card py-4">
-            <div class="flex items-start gap-3">
-              <div class="min-w-0 flex-1">
-                <ChoiceContentLive
-                  question={@question}
-                  object={@object}
-                  viewing_main_object={@viewing_main_object}
-                  showing_within={@showing_within}
-                  is_remote={@is_remote}
-                  hide_actions={@hide_actions}
-                  voting_format={@voting_format}
-                  vote={@vote}
-                  compact={@compact}
-                  is_winner={false}
-                />
-
-                {!-- "Your reaction: [face] Label" — label and prefix muted, only
-                     the face icon carries the reaction colour (Figma). --}
-                {#case score_label(@user_score)}
-                  {#match nil}
-                  {#match {_v, name, icon, _desc}}
-                    <div
-                      class="mt-1.5 inline-flex items-center gap-1.5 text-base text-muted"
-                      data-role="your-score"
-                      data-score={"#{@user_score}"}
-                    >
-                      <span>{l("Your reaction:")}</span>
-                      <Iconify.iconify icon={icon} class={["size-4", score_color_class(@user_score)]} />
-                      <span>{name}</span>
-                    </div>
-                {/case}
-              </div>
-
-              {!-- No AGREED / BLOCKED verdict pill for group decisions — just the
-                   reaction count. The group interprets the results. --}
-              {#if @viewing_main_object}
-                <div class="shrink-0 flex items-center gap-2">
-                  <span class="text-base text-base-content tabular-nums" data-role="choice-participation">({@vote_count})</span>
-                </div>
-              {/if}
+          {!-- Consent results: one stacked bar per option, Disagree to Great in
+               scale order, with Block counted beside it rather than in it (a
+               veto, not a degree of agreement). No percentage and no verdict:
+               everyone reacts to every option, and the group reads the spread
+               itself. Under the bar, a count line names each reaction present,
+               in its tone, with the viewer's own marked, so the numbers are
+               visible on touch too and the bar itself can stay decorative. The
+               bar and Block live in one `reaction-strip` for feed and thread
+               alike; empty buckets stay in the DOM, hidden. The option text sits
+               above its bar at every width, so long options wrap freely. Phones
+               show each option as a card; from `sm` the card chrome goes, since
+               a results list needs no card per row. --}
+          <div
+            data-role="consent-result"
+            class="poll-card flex flex-col gap-2 sm:gap-1.5 sm:rounded-none sm:[border:0] sm:bg-transparent sm:px-0 sm:py-1"
+          >
+            <div class="min-w-0" data-role="decision-label">
+              <ChoiceContentLive
+                question={@question}
+                object={@object}
+                viewing_main_object={@viewing_main_object}
+                showing_within={@showing_within}
+                is_remote={@is_remote}
+                hide_actions={@hide_actions}
+                voting_format={@voting_format}
+                vote={@vote}
+                compact={@compact}
+                is_winner={false}
+              />
+              {!-- Same on every option (everyone reacts to each), so it's only
+                   for screen readers. --}
+              <span :if={@viewing_main_object} class="sr-only" data-role="choice-participation">({@vote_count})</span>
             </div>
 
-            {!-- Feed: the whole scale as face + count, empty buckets dimmed, Block
-                 set apart. The reaction count alone is the same on every option
-                 (everyone reacts to each), so it tells the reader nothing here. --}
-            {#if not @viewing_main_object}
-              <div
-                class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums"
-                data-role="reaction-strip"
-              >
-                {#for {value, name, icon, color, count} <- reaction_strip(@score_histogram)}
-                  {#if value == "∞"}
-                    <span class="ml-auto h-4 border-l border-divider" aria-hidden="true" />
-                  {/if}
-                  <span
-                    class={["inline-flex items-center gap-1", "opacity-40": count == 0]}
-                    title={name}
-                    data-role="reaction-strip-bucket"
-                    data-bucket={"#{value}"}
-                    data-count={count}
-                  >
-                    <Iconify.iconify icon={icon} class={["size-4", color]} aria-hidden="true" />
-                    <span class="sr-only">{name}</span>
-                    <span class="text-base-content">{count}</span>
-                  </span>
-                {/for}
-              </div>
-            {/if}
+            {#case reaction_strip(@score_histogram)}
+              {#match {scale, {block_value, _name, block_icon, block_count}}}
+                <div class="flex items-center gap-2.5" data-role="reaction-strip">
+                  <div class="flex h-2 flex-1 gap-0.5 overflow-hidden rounded-full bg-(--poll-track)" aria-hidden="true">
+                    {#for {value, name, _icon, count} <- scale}
+                      <span
+                        class={["h-full basis-0 grow-(--n) bg-(--tone)", hidden: count == 0]}
+                        style={"--n: #{count}; --tone: var(#{score_tone_var(value)})"}
+                        title={"#{name}: #{count}"}
+                        data-role="reaction-strip-bucket"
+                        data-bucket={"#{value}"}
+                        data-count={count}
+                        data-mine={viewer_in_bucket?(@voted_on, @user_score, value)}
+                      />
+                    {/for}
+                  </div>
 
-            {!-- Thread only: the reaction spread as calm chips (Disagree → Agree →
-                 Block), the viewer's own bucket ringed — keeps the whole card in
-                 one token language instead of a charty diverging bar. --}
-            {#if @viewing_main_object and has_histogram?(@score_histogram)}
-              <div class="mt-2.5 flex flex-wrap items-center gap-1.5" data-role="reaction-chips">
-                {#for {value, name, icon, color, count} <- reaction_chips(@score_histogram)}
                   <span
                     class={[
-                      "inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm",
-                      "ring-1 ring-inset ring-primary/40": viewer_in_bucket?(@voted_on, @user_score, value)
+                      "shrink-0 items-center gap-1 text-[12px]/[16px] font-bold tabular-nums text-(--poll-tone-block)",
+                      if(block_count > 0, do: "inline-flex", else: "hidden")
                     ]}
-                    data-role="reaction-chip"
-                    data-bucket={"#{value}"}
+                    data-role="reaction-strip-bucket"
+                    data-bucket={"#{block_value}"}
+                    data-count={block_count}
+                    data-mine={viewer_in_bucket?(@voted_on, @user_score, block_value)}
                   >
-                    <Iconify.iconify icon={icon} class={["size-4", color]} aria-hidden="true" />
-                    <span class="text-muted">{name}</span>
-                    <span class="tabular-nums text-muted">{count}</span>
-                    {#if viewer_in_bucket?(@voted_on, @user_score, value)}
-                      <span class="text-primary font-medium">· {l("you")}</span>
+                    <Iconify.iconify icon={block_icon} class="size-3.5" aria-hidden="true" />
+                    {blocks_label(block_count)}
+                    {#if viewer_in_bucket?(@voted_on, @user_score, block_value)}
+                      <span>· {l("you")}</span>
                     {/if}
                   </span>
-                {/for}
-              </div>
-            {/if}
+                </div>
+
+                <div
+                  class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px]/[16px] text-(--poll-meta) tabular-nums"
+                  data-role="reaction-counts"
+                >
+                  {#for {value, name, _icon, count} <- Enum.filter(scale, &(elem(&1, 3) > 0))}
+                    <span
+                      class="inline-flex items-center gap-1.5"
+                      style={"--tone: var(#{score_tone_var(value)})"}
+                      data-role="reaction-count"
+                      data-bucket={"#{value}"}
+                      data-mine={viewer_in_bucket?(@voted_on, @user_score, value)}
+                    >
+                      <span class="size-2 shrink-0 rounded-[2px] bg-(--tone)" aria-hidden="true" />
+                      {#if viewer_in_bucket?(@voted_on, @user_score, value)}
+                        <span class="poll-tone-text font-medium">{name} {count} · {l("you")}</span>
+                      {#else}
+                        <span>{name} {count}</span>
+                      {/if}
+                    </span>
+                  {/for}
+                </div>
+            {/case}
           </div>
         {#else}
           {!-- Tally poll: a real, honest share bar. For "single" the denominator
@@ -123,58 +115,76 @@
                100% (correct for multi-select). --}
           {#case tally_percent(@voting_format, @vote_count, @total_votes, @voters_count)}
             {#match pct}
-              {!-- Figma "Poll closed w/ result": label · (N) · big % on one line,
-                   then a thin full-width share bar below. --}
-              <div class="px-card py-4" data-role="choice-result" data-winner={@is_winner}>
-                <div class="flex items-baseline gap-3">
-                  <div class="min-w-0 flex-1">
-                    <ChoiceContentLive
-                      question={@question}
-                      object={@object}
-                      viewing_main_object={@viewing_main_object}
-                      showing_within={@showing_within}
-                      is_remote={@is_remote}
-                      hide_actions={@hide_actions}
-                      voting_format={@voting_format}
-                      vote={@vote}
-                      compact={@compact}
-                      is_winner={@is_winner}
-                    />
+              {!-- Same geometry as the option row it replaces: the share bar fills
+                   the row behind the label, so voting and results read as one
+                   list. The count stays for screen readers; the % carries it on
+                   screen. Only the final winner gets the accent bar. --}
+              <div
+                class="poll-option relative isolate flex items-center gap-3 overflow-hidden"
+                data-role="choice-result"
+                data-winner={@is_winner}
+              >
+                <div class="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 *:w-auto" data-role="choice-result-label">
+                  <ChoiceContentLive
+                    question={@question}
+                    object={@object}
+                    viewing_main_object={@viewing_main_object}
+                    showing_within={@showing_within}
+                    is_remote={@is_remote}
+                    hide_actions={@hide_actions}
+                    voting_format={@voting_format}
+                    vote={@vote}
+                    compact={@compact}
+                    is_winner={@is_winner}
+                  />
 
-                    {#if voted_on}
-                      <div class="mt-2 inline-flex items-center gap-1 text-xs text-muted" data-role="your-vote">
-                        <Iconify.iconify icon="ph:check-circle-fill" class="size-3 text-primary" />
-                        <span>{l("Your vote")}</span>
-                      </div>
-                    {/if}
-                  </div>
-
-                  <span class="shrink-0 text-base text-muted tabular-nums" data-role="choice-count">({@vote_count})</span>
-                  <span
-                    class="shrink-0 text-xl font-medium text-base-content tabular-nums"
-                    data-role="choice-stats"
-                  >{pct}%</span>
+                  {#if voted_on}
+                    <span class="inline-flex items-center gap-1 text-[12px]/[16px] font-medium text-(--poll-meta-strong)" data-role="your-vote">
+                      <Iconify.iconify icon="ph:check-circle-fill" class="size-3.5 text-primary" />
+                      <span>{l("Your vote")}</span>
+                    </span>
+                  {/if}
                 </div>
 
+                <span class="sr-only" data-role="choice-count">({@vote_count})</span>
+                <span
+                  class={[
+                    "shrink-0 text-[15px]/[20px] tabular-nums",
+                    "font-bold text-base-content": @is_winner,
+                    "font-medium text-(--poll-meta-strong)": !@is_winner
+                  ]}
+                  data-role="choice-stats"
+                >{pct}%</span>
+
                 {!-- share bar: sweeps 0→pct on mount; reduced-motion starts at target --}
-                <div class="mt-3 h-2 rounded-full bg-base-200 overflow-hidden" role="img" aria-label={"#{pct}%"}>
+                <div data-role="share-bar" class="absolute inset-0 -z-10 rounded-[inherit]" role="img" aria-label={"#{pct}%"}>
                   <div
                     aria-hidden="true"
                     x-data={"{ w: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? #{pct} : 0 }"}
                     x-init={"$nextTick(() => w = #{pct})"}
                     :style="`width: ${w}%`"
-                    class="h-full rounded-full bg-primary motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]"
+                    class={[
+                      "h-full rounded-[inherit] motion-safe:transition-[width] motion-safe:duration-700 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+                      "bg-(--poll-bar-winner)": @is_winner,
+                      "bg-(--poll-bar)": !@is_winner
+                    ]}
                   />
                 </div>
               </div>
           {/case}
         {/if}
       {#elseif @vote and not voted_on and @voting_format == "weighted_multiple"}
-        {!-- Inline layout: choice text on the left, face strip on the right.
-             Stacks below on narrow viewports (sm:). Halves the per-choice
-             vertical height versus the previous two-band layout. --}
-        <div class="flex flex-col sm:flex-row sm:items-center gap-2 rounded-selector px-3 py-2 motion-safe:transition-colors hover:bg-base-content/[0.03]">
-          <div class="flex-1 min-w-0">
+        {!-- Two rows at every width: the option text on top, free to wrap, and
+             the scale below, so long options never squeeze the controls. The
+             picked reaction is named at the top right (`pr-24` keeps the label
+             clear of it). Phones show each option as a card; from `sm` the
+             chrome goes, as with the results, since the scale's track already
+             groups each row. --}
+        <div
+          data-role="decision-row"
+          class="poll-card relative flex flex-col gap-2 sm:gap-1.5 sm:rounded-none sm:[border:0] sm:bg-transparent sm:px-0 sm:py-1"
+        >
+          <div class="min-w-0 pr-24" data-role="decision-label">
             <ChoiceContentLive
               question={@question}
               object={@object}
@@ -194,8 +204,6 @@
             choice={@object}
             index={@index}
             selected={false}
-            compact={@compact}
-            inline
             id_prefix={@id_prefix}
           />
         </div>
@@ -207,7 +215,6 @@
             choice={@object}
             index={@index}
             selected={false}
-            compact={@compact}
             id_prefix={@id_prefix}
           >
             <ChoiceContentLive
@@ -225,8 +232,9 @@
           </VotingLive>
         </div>
       {#elseif voted_on and @voting_format == "weighted_multiple"}
-        <div class="flex items-start gap-2 rounded-box px-3 py-2.5">
-          <div class="min-w-0 flex-1">
+        {!-- Reacted, results not shown yet: the card without the bar. --}
+        <div class="poll-card flex flex-col gap-1">
+          <div class="min-w-0">
             <ChoiceContentLive
               question={@question}
               object={@object}
@@ -243,19 +251,22 @@
               {#match nil}
               {#match {_v, name, icon, _desc}}
                 <div
-                  class="mt-1 inline-flex items-center gap-1.5 text-xs"
+                  class="mt-1 inline-flex items-center gap-1.5 text-[12px]/[16px] text-(--poll-meta)"
                   data-role="your-score"
                   data-score={"#{@user_score}"}
+                  style={"--tone: var(#{score_tone_var(@user_score)})"}
                 >
-                  <span class="text-muted">{l("Your reaction:")}</span>
-                  <Iconify.iconify icon={icon} class={["size-4", score_color_class(@user_score)]} />
-                  <span class={["font-medium", score_color_class(@user_score)]}>{name}</span>
+                  <span>{l("Your reaction:")}</span>
+                  <Iconify.iconify icon={icon} class="size-4 text-(--tone)" />
+                  <span class="poll-tone-text font-medium">{name}</span>
                 </div>
             {/case}
           </div>
         </div>
       {#elseif voted_on}
-        <div class="flex items-center gap-3 rounded-box px-3 py-2.5">
+        {!-- Voted, results not shown yet: the option row, ringed and checked
+             like a fresh pick. --}
+        <div class="poll-option poll-picked flex items-center gap-3">
           <Iconify.iconify
             icon="ph:check-circle-fill"
             class="size-4 text-primary shrink-0"
@@ -277,7 +288,9 @@
           </div>
         </div>
       {#else}
-        <div class="flex items-start gap-3 px-3 py-2.5">
+        {!-- Read-only (signed out, results hidden, or a suggestion during the
+             proposal phase): the option row without a live indicator. --}
+        <div class="poll-option flex items-start gap-3">
           {#if @proposal_phase}
             {!-- Disabled vote-slot preview: signals 'this becomes votable
                  once the proposal phase closes.' Decorative only —
@@ -288,7 +301,7 @@
               tabindex="-1"
               aria-hidden="true"
               data-role="proposal-vote-slot"
-              class="radio radio-sm radio-primary mt-0.5 shrink-0 opacity-40 cursor-not-allowed"
+              class="radio radio-sm radio-primary mt-0.5 shrink-0 opacity-40 cursor-not-allowed [--input-color:var(--poll-indicator-idle)]"
             />
           {/if}
           <div class="flex-1 min-w-0">
@@ -310,13 +323,13 @@
                 {#match author}
                   {#case proposer_username(@object)}
                     {#match nil}
-                      <div class="mt-1 text-xs text-muted" data-role="proposer">
+                      <div class="mt-0.5 text-[12px]/[16px] text-(--poll-meta)" data-role="proposer">
                         {l("Suggested by %{name}", name: author)}
                       </div>
                     {#match username}
-                      <div class="mt-1 text-xs text-muted" data-role="proposer">
+                      <div class="mt-0.5 text-[12px]/[16px] text-(--poll-meta)" data-role="proposer">
                         {l("Suggested by")}
-                        <a href={"/@" <> username} class="link link-hover text-muted hover:text-base-content">@{username}</a>
+                        <a href={"/@" <> username} class="link link-hover hover:text-base-content">@{username}</a>
                       </div>
                   {/case}
               {/case}

@@ -347,8 +347,8 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   @doc """
   The kind of decision a poll represents, as a label. Consent decisions read
   differently from tally polls because they resolve differently, so the band
-  names the process rather than calling everything a "poll". (The band's icon is
-  the decision *state*, not the kind,  see `state_color_class/1`.)
+  names the process rather than calling everything a "poll". (The state is shown
+  separately, see `state_tone_class/1`.)
   """
   def process_kind("weighted_multiple"), do: l("Group decision")
   def process_kind("multiple"), do: l("Multiple choice")
@@ -405,21 +405,14 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   def state_label(:no_agreement, _format), do: l("No agreement")
   def state_label(_state, _format), do: l("Closed")
 
-  @doc "DaisyUI tone for a `decision_state/5` value, matching the status icon."
-  def state_color_class(:open), do: "text-success"
-  def state_color_class(:decided), do: "text-success"
-  def state_color_class(:no_consensus), do: "text-error"
-  def state_color_class(_state), do: "text-muted"
-
   @doc """
-  Text + border tone for the status-band *state pill* (and its dot, which is
-  `bg-current`), so the pill outline matches the state colour. Mirrors
-  `state_color_class/1` but adds the matching border token.
+  Text tone for the meta line's state label (and its dot, which is
+  `bg-current`).
   """
-  def state_tone_class(:open), do: "text-success border-success"
+  def state_tone_class(:open), do: "text-success"
   # Closed states carry no verdict colour — only the temporal open/closed
   # distinction is signalled (success while open, neutral once closed).
-  def state_tone_class(_state), do: "text-muted border-base-content/25"
+  def state_tone_class(_state), do: "text-muted"
 
   @doc "Names of the choices whose ids are in `ids` (for carried / blocked summaries)."
   def choice_names(choices, ids) when is_list(choices) do

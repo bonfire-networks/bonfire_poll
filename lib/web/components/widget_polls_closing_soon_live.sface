@@ -33,8 +33,8 @@
             class="scroll-pl-card pb-2"
           >
             <:card :let={item: poll}>
-                {!-- `px-4` compensates for the preview's own `-mx-4` so its
-                     full-width status band aligns to the card edges.
+                {!-- `px-4` compensates for the preview's own `-mx-4`, so the
+                     question and option rows line up with the byline.
 
                      The card carries the `PreviewActivity` hook + a hidden
                      `.open_preview_link` trigger (`OpenPreviewLive`) so clicking
