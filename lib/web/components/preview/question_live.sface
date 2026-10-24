@@ -153,10 +153,7 @@
                   </form>
                 {/if}
 
-                <div
-                  data-role="poll-meta"
-                  class="poll-meta-line"
-                >
+                <div data-role="poll-meta" class="poll-meta-line">
                   <span class="inline-flex items-center gap-1.5 font-medium text-(--poll-meta-strong)">
                     <Iconify.iconify icon="ph:lightbulb" class="size-3.5 shrink-0" />
                     {l("Proposal phase")}
@@ -171,21 +168,20 @@
             {#elseif e(@object, :voting_dates, nil) != false}
               {#case decision_state(voting_format, closed, total_votes, vetoed_ids, winning_ids)}
                 {#match state}
-              {!-- A wrapping flex row: blocks take the full width, and the meta
+                  {!-- A wrapping flex row: blocks take the full width, and the meta
                    line shares the last row with the actions when they fit.
                    `data-format` / `data-state` drive which meta parts show. --}
-              <form
-                id={"vote-form-#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}-#{id(@object)}"}
-                data-role="poll"
-                data-format={voting_format}
-                data-state={state}
-                class="group/poll mt-3 px-4 flex flex-wrap items-center gap-x-4"
-                phx-submit="Bonfire.Poll:submit_vote"
-                phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
-                x-data="{ hasSelection: false }"
-                x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
-              >
-
+                  <form
+                    id={"vote-form-#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}-#{id(@object)}"}
+                    data-role="poll"
+                    data-format={voting_format}
+                    data-state={state}
+                    class="group/poll mt-3 px-4 flex flex-wrap items-center gap-x-4"
+                    phx-submit="Bonfire.Poll:submit_vote"
+                    phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
+                    x-data="{ hasSelection: false }"
+                    x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
+                  >
                     {!-- A standing objection while voting is still open reads as
                      caution (warning), not finality (error): the group can still
                      resolve it before close. --}
@@ -350,10 +346,7 @@
                      open one no state (time left says it). --}
                     {#case process_kind(voting_format)}
                       {#match kind_label}
-                        <div
-                          data-role="poll-meta"
-                          class="poll-meta-line"
-                        >
+                        <div data-role="poll-meta" class="poll-meta-line">
                           <span
                             class="font-medium text-(--poll-meta-strong) group-data-[format=single]/poll:hidden"
                             data-role="poll-kind"
@@ -375,10 +368,7 @@
                               {#case time_remaining_label}
                                 {#match nil}
                                 {#match tlabel}
-                                  <span
-                                    data-role="time-remaining"
-                                    class="poll-live"
-                                  >{tlabel}</span>
+                                  <span data-role="time-remaining" class="poll-live">{tlabel}</span>
                               {/case}
                             {/if}
                             {#if not locked}
@@ -395,7 +385,10 @@
                     {/case}
 
                     {#if not closed}
-                      <div data-role="poll-actions" class="basis-full sm:basis-auto ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2 py-1.5">
+                      <div
+                        data-role="poll-actions"
+                        class="basis-full sm:basis-auto ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2 py-1.5"
+                      >
                         {!-- Results first, the primary action last at the row's end, where
                              the eye lands after picking. Phones give the actions their
                              own row so Vote appearing on the first pick moves nothing. --}
@@ -462,7 +455,7 @@
                         {/if}
                       </div>
                     {/if}
-              </form>
+                  </form>
               {/case}
             {/if}
           {/if}

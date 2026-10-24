@@ -123,10 +123,7 @@
                       group == :block
                   ]}
                 >
-                  <Iconify.iconify
-                    icon={icon}
-                    class="size-5 transition group-aria-checked:scale-110"
-                  />
+                  <Iconify.iconify icon={icon} class="size-5 transition group-aria-checked:scale-110" />
                 </button>
               {/for}
             </div>
@@ -138,11 +135,14 @@
       {!-- A field per option, ringed once picked; the indicator stays muted
            until checked so the accent marks only the choice. Presets restyle it
            through the --poll-* tokens (app.css). --}
-      <label data-role="vote-option" class={[
-        "poll-option flex items-center gap-3 cursor-pointer transition-[background-color,box-shadow] has-checked:poll-picked",
-        "hover:bg-(--poll-option-bg-hover)": !@readonly,
-        "cursor-default": @readonly
-      ]}>
+      <label
+        data-role="vote-option"
+        class={[
+          "poll-option flex items-center gap-3 cursor-pointer transition-[background-color,box-shadow] has-checked:poll-picked",
+          "hover:bg-(--poll-option-bg-hover)": !@readonly,
+          "cursor-default": @readonly
+        ]}
+      >
         <input
           type="checkbox"
           name={"vote[#{id(@choice) || "_"}]"}
@@ -159,11 +159,14 @@
       {!-- A field per option, ringed once picked; the indicator stays muted
            until checked so the accent marks only the choice. Presets restyle it
            through the --poll-* tokens (app.css). --}
-      <label data-role="vote-option" class={[
-        "poll-option flex items-center gap-3 cursor-pointer transition-[background-color,box-shadow] has-checked:poll-picked",
-        "hover:bg-(--poll-option-bg-hover)": !@readonly,
-        "cursor-default": @readonly
-      ]}>
+      <label
+        data-role="vote-option"
+        class={[
+          "poll-option flex items-center gap-3 cursor-pointer transition-[background-color,box-shadow] has-checked:poll-picked",
+          "hover:bg-(--poll-option-bg-hover)": !@readonly,
+          "cursor-default": @readonly
+        ]}
+      >
         <input
           type="radio"
           name="vote"

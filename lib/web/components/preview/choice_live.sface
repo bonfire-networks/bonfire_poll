@@ -53,7 +53,10 @@
             {#case reaction_strip(@score_histogram)}
               {#match {scale, {block_value, _name, block_icon, block_count}}}
                 <div class="flex items-center gap-2.5" data-role="reaction-strip">
-                  <div class="flex h-2 flex-1 gap-0.5 overflow-hidden rounded-full bg-(--poll-track)" aria-hidden="true">
+                  <div
+                    class="flex h-2 flex-1 gap-0.5 overflow-hidden rounded-full bg-(--poll-track)"
+                    aria-hidden="true"
+                  >
                     {#for {value, name, _icon, count} <- scale}
                       <span
                         class={["h-full basis-0 grow-(--n) bg-(--tone)", hidden: count == 0]}
@@ -124,7 +127,10 @@
                 data-role="choice-result"
                 data-winner={@is_winner}
               >
-                <div class="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 *:w-auto" data-role="choice-result-label">
+                <div
+                  class="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 *:w-auto"
+                  data-role="choice-result-label"
+                >
                   <ChoiceContentLive
                     question={@question}
                     object={@object}
@@ -139,7 +145,10 @@
                   />
 
                   {#if voted_on}
-                    <span class="inline-flex items-center gap-1 text-[12px]/[16px] font-medium text-(--poll-meta-strong)" data-role="your-vote">
+                    <span
+                      class="inline-flex items-center gap-1 text-[12px]/[16px] font-medium text-(--poll-meta-strong)"
+                      data-role="your-vote"
+                    >
                       <Iconify.iconify icon="ph:check-circle-fill" class="size-3.5 text-primary" />
                       <span>{l("Your vote")}</span>
                     </span>
@@ -157,7 +166,12 @@
                 >{pct}%</span>
 
                 {!-- share bar: sweeps 0→pct on mount; reduced-motion starts at target --}
-                <div data-role="share-bar" class="absolute inset-0 -z-10 rounded-[inherit]" role="img" aria-label={"#{pct}%"}>
+                <div
+                  data-role="share-bar"
+                  class="absolute inset-0 -z-10 rounded-[inherit]"
+                  role="img"
+                  aria-label={"#{pct}%"}
+                >
                   <div
                     aria-hidden="true"
                     x-data={"{ w: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? #{pct} : 0 }"}

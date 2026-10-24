@@ -180,7 +180,9 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceLive do
       {"∞", "Block", "ph:prohibit-fill", 1}
   """
   def reaction_strip(histogram) when is_map(histogram),
-    do: {Enum.map(@scale_order, &histogram_segment(histogram, &1)), histogram_segment(histogram, nil)}
+    do:
+      {Enum.map(@scale_order, &histogram_segment(histogram, &1)),
+       histogram_segment(histogram, nil)}
 
   def reaction_strip(_), do: reaction_strip(%{})
 end
