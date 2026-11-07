@@ -263,25 +263,26 @@ defmodule Bonfire.Poll.Questions do
   """
   defdelegate vote_counts_for_questions(question_ids), to: Votes, as: :counts_for_questions
 
-  # --- "Polls closing soon" widget loader (cached per user + limit) ---
+  # --- "Polls closing soon" widget loader (cached for guests and for everyone signed in) ---
 
   @doc """
   `%{polls}` for the "Polls closing soon" widget — the open polls closing soonest, with their
-  choices preloaded so the full preview can render. Cached per user and limit for 1h, and self-busts
+  choices preloaded so the full preview can render. Cached per limit for 1h, once for guests and once for everyone signed in, each loaded as that circle (`Bonfire.Boundaries.Circles.query_as_circle/1`) rather than as one user, so nobody's restricted polls reach anyone else (the widget then drops what each viewer may not see, eg. from someone they blocked), and self-busts
   when most of the cached polls have already ended (so a stale list doesn't linger). Pass the
   standard `:cache` opt (`cache: :refresh` busts + recomputes — the widget's manual refresh button;
   the key is built once by `closing_soon_cache_key/2`). (Vote counts and the viewer's own votes are
   read fresh by the widget, not cached, so tallies and "you've voted" never lag a vote.)
   """
   def closing_soon_widget(current_user, limit, opts \\ []) do
-    cache_key = closing_soon_cache_key(current_user, limit)
-    result = closing_soon_cached(current_user, limit, cache_key, opts)
+    {circle, as_circle_opts} = Bonfire.Boundaries.Circles.query_as_circle(current_user)
+    cache_key = closing_soon_circle_key(circle, limit)
+    result = closing_soon_cached(limit, as_circle_opts, cache_key, opts)
 
     case result do
       %{polls: polls} ->
         if mostly_ended?(polls) do
           # stale list lingered — bust + recompute (drop any one-shot :cache verb already applied)
-          closing_soon_cached(current_user, limit, cache_key, cache: :refresh)
+          closing_soon_cached(limit, as_circle_opts, cache_key, cache: :refresh)
         else
           result
         end
@@ -292,27 +293,31 @@ defmodule Bonfire.Poll.Questions do
     end
   end
 
-  defp closing_soon_cached(current_user, limit, cache_key, opts \\ []) do
+  defp closing_soon_cached(limit, as_circle_opts, cache_key, opts \\ []) do
     Cache.maybe_apply_cached(
       &do_closing_soon/2,
-      [current_user, limit],
+      [limit, as_circle_opts],
       opts
       |> Keyword.put(:cache_key, cache_key)
       |> Keyword.put_new(:expire, :timer.minutes(60))
     )
   end
 
-  defp do_closing_soon(current_user, limit) do
-    polls = list_closing_soon([current_user: current_user], limit)
+  defp do_closing_soon(limit, as_circle_opts) do
+    polls = list_closing_soon(as_circle_opts, limit)
     # Per-choice counts and the viewer's own votes are read fresh at render time
     # by the widget (via `Votes.preview_vote_state_for_questions/2`), so they're
     # not cached here — only the poll list itself is.
     %{polls: polls}
   end
 
-  @doc "Cache key for `closing_soon_widget/3` — used by both the loader and any reset, so they can't drift."
-  def closing_soon_cache_key(current_user, limit),
-    do: "widget_polls_closing_soon:#{id(current_user) || "guest"}:#{limit}"
+  @doc "Cache key for `closing_soon_widget/3`, the same for everyone signed in, and another for guests. Used by both the loader and any reset, so they can't drift."
+  def closing_soon_cache_key(current_user, limit) do
+    {circle, _opts} = Bonfire.Boundaries.Circles.query_as_circle(current_user)
+    closing_soon_circle_key(circle, limit)
+  end
+
+  defp closing_soon_circle_key(circle, limit), do: "widget_polls_closing_soon:#{circle}:#{limit}"
 
   defp mostly_ended?([]), do: false
 

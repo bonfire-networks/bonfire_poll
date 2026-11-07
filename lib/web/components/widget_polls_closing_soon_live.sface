@@ -45,63 +45,71 @@
                      live inside the preview's vote form. --}
               {#case poll_permalink(poll)}
                 {#match permalink}
-                  <div
-                    id={poll_card_id(poll)}
-                    data-href={permalink}
-                    data-role="poll_card"
-                    phx-hook="Bonfire.UI.Common.PreviewContentLive#PreviewActivity"
-                    tabIndex="0"
-                    class="h-full rounded-box border-hair border-divider bg-base-100 overflow-hidden px-4 py-3 pb-0 cursor-pointer"
+                  {!-- the list is cached for everyone signed in, so whatever this viewer may not see, eg. from someone they silenced, is dropped here --}
+                  <StatefulComponent
+                    module={maybe_component(Bonfire.UI.Boundaries.IfCan, @__context__)}
+                    id={"poll_if_can_#{id(poll)}"}
+                    object={poll}
+                    check_object_boundary={current_user_id(@__context__) && [:see, :read]}
                   >
-                    <Bonfire.UI.Common.OpenPreviewLive
-                      :if={permalink}
-                      href={permalink}
-                      parent_id={poll_card_id(poll)}
-                      open_btn_text=""
-                      title_text={poll_title(poll)}
-                      modal_assigns={poll_preview_modal_assigns(poll, permalink)}
-                      root_assigns={[page_title: l("Discussion")]}
-                    />
+                    <div
+                      id={poll_card_id(poll)}
+                      data-href={permalink}
+                      data-role="poll_card"
+                      phx-hook="Bonfire.UI.Common.PreviewContentLive#PreviewActivity"
+                      tabIndex="0"
+                      class="h-full rounded-box border-hair border-divider bg-base-100 overflow-hidden px-4 py-3 pb-0 cursor-pointer"
+                    >
+                      <Bonfire.UI.Common.OpenPreviewLive
+                        :if={permalink}
+                        href={permalink}
+                        parent_id={poll_card_id(poll)}
+                        open_btn_text=""
+                        title_text={poll_title(poll)}
+                        modal_assigns={poll_preview_modal_assigns(poll, permalink)}
+                        root_assigns={[page_title: l("Discussion")]}
+                      />
 
-                    {!-- Author byline: in a feed this comes from the surrounding
+                      {!-- Author byline: in a feed this comes from the surrounding
                            `ActivityLive`, which the widget doesn't use. --}
-                    {#case poll_creator(poll)}
-                      {#match nil}
-                      {#match creator}
-                        <div class="flex items-center gap-2 pb-2" data-role="poll_author">
-                          <LinkLive
-                            to={creator_path(creator)}
-                            parent_id={poll_card_id(poll)}
-                            class="shrink-0"
-                            label={l("%{name}'s profile", name: creator_name(creator))}
-                          >
-                            <Bonfire.UI.Common.AvatarLive
-                              ring
-                              parent_id={poll_card_id(poll)}
-                              user_id={id(creator)}
-                              src={creator_avatar(creator)}
-                              title={creator_name(creator)}
-                              class="rounded-full size-7"
-                              fallback_class="size-4 opacity-30 mx-auto"
-                            />
-                          </LinkLive>
-                          <div class="flex items-baseline gap-1 min-w-0 text-base">
+                      {#case poll_creator(poll)}
+                        {#match nil}
+                        {#match creator}
+                          <div class="flex items-center gap-2 pb-2" data-role="poll_author">
                             <LinkLive
                               to={creator_path(creator)}
                               parent_id={poll_card_id(poll)}
-                              opts={"data-id": "subject_name"}
-                              class="link link-hover font-medium text-base-content truncate"
+                              class="shrink-0"
+                              label={l("%{name}'s profile", name: creator_name(creator))}
                             >
-                              {creator_name(creator)}
+                              <Bonfire.UI.Common.AvatarLive
+                                ring
+                                parent_id={poll_card_id(poll)}
+                                user_id={id(creator)}
+                                src={creator_avatar(creator)}
+                                title={creator_name(creator)}
+                                class="rounded-full size-7"
+                                fallback_class="size-4 opacity-30 mx-auto"
+                              />
                             </LinkLive>
-                            <span class="text-subtle" aria-hidden="true">·</span>
-                            <span class="text-muted shrink-0">{DatesTimes.date_from_now(id(poll))}</span>
+                            <div class="flex items-baseline gap-1 min-w-0 text-base">
+                              <LinkLive
+                                to={creator_path(creator)}
+                                parent_id={poll_card_id(poll)}
+                                opts={"data-id": "subject_name"}
+                                class="link link-hover font-medium text-base-content truncate"
+                              >
+                                {creator_name(creator)}
+                              </LinkLive>
+                              <span class="text-subtle" aria-hidden="true">·</span>
+                              <span class="text-muted shrink-0">{DatesTimes.date_from_now(id(poll))}</span>
+                            </div>
                           </div>
-                        </div>
-                    {/case}
+                      {/case}
 
-                    <QuestionLive object={poll} vote_state={vote_state} />
-                  </div>
+                      <QuestionLive object={poll} vote_state={vote_state} />
+                    </div>
+                  </StatefulComponent>
               {/case}
             </:card>
           </Bonfire.UI.Common.CarouselLive>
