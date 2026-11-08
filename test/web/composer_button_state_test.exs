@@ -23,7 +23,7 @@ defmodule Bonfire.Poll.Web.ComposerButtonStateTest do
     assert persistent, "sticky PersistentLive child not found"
 
     persistent
-    |> element("#composer_type_chooser a[phx-click*='CreatePollLive']")
+    |> element("#composer_type_tray_rail button[phx-click*='CreatePollLive']")
     |> render_click()
 
     # the type switch routes through PersistentLive's `set` messaging (a

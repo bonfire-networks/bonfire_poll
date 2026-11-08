@@ -32,6 +32,7 @@
       thread_mode={@thread_mode}
       reply_to_id={uid(@reply_to_id)}
       context_id={@context_id}
+      context_group={@context_group}
       create_object_type={@create_object_type}
       to_boundaries={@to_boundaries}
       to_circles={@to_circles}
@@ -58,6 +59,7 @@
               <div id="poll_question_wrapper" phx-update="ignore">
                 <TextInput
                   id="poll_question"
+                  value={Bonfire.Common.Text.normalize_whitespace(e(@smart_input_opts, :text, nil))}
                   opts={placeholder: l("What are we deciding?")}
                   class="block w-full rounded-md border border-divider bg-base-100 px-3 py-2.5 text-base text-base-content placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
                 />

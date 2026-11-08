@@ -10,6 +10,7 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   prop proposals, :list, default: []
 
   prop context_id, :string, default: nil
+  prop context_group, :any, default: nil
   prop create_object_type, :any, default: nil
   prop to_boundaries, :any, default: nil
   prop to_circles, :list, default: []
@@ -50,7 +51,7 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   def smart_input_module, do: [:poll, Bonfire.Poll.Question]
 
   def smart_input_icon(_), do: "ph:list-checks-duotone"
-  def smart_input_label(_), do: l("Create poll")
+  def smart_input_label(_), do: l("Poll")
 
   # `:merge_tuning` carries only one changed toggle; merge it into the
   # existing tuning_state so the other toggles survive.
