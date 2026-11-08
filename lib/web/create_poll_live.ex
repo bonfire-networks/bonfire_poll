@@ -10,7 +10,6 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   prop proposals, :list, default: []
 
   prop context_id, :string, default: nil
-  prop context_group, :any, default: nil
   prop create_object_type, :any, default: nil
   prop to_boundaries, :any, default: nil
   prop to_circles, :list, default: []

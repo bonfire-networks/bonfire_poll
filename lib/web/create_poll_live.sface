@@ -32,7 +32,6 @@
       thread_mode={@thread_mode}
       reply_to_id={uid(@reply_to_id)}
       context_id={@context_id}
-      context_group={@context_group}
       create_object_type={@create_object_type}
       to_boundaries={@to_boundaries}
       to_circles={@to_circles}
