@@ -52,6 +52,13 @@ defmodule Bonfire.Poll.Web.PollMarkupTest do
 
   defp thread(conn, q), do: conn |> visit("/discussion/#{q.id}") |> wait_async()
 
+  # a signed-in viewer's tallies load only after "See results"
+  defp see_results(session),
+    do:
+      session
+      |> click_button("[data-role=results-toggle]", "See results")
+      |> wait_async()
+
   describe "vote form state hooks" do
     # The meta line hides the kind for single-choice polls and the state while
     # open, keyed on these attributes; a missing or renamed value would show
@@ -75,6 +82,7 @@ defmodule Bonfire.Poll.Web.PollMarkupTest do
 
       conn
       |> thread(q)
+      |> see_results()
       |> assert_has("form[data-role=poll][data-state=open]")
       |> assert_has("[data-role=open-block-note]")
     end
@@ -86,12 +94,14 @@ defmodule Bonfire.Poll.Web.PollMarkupTest do
 
       conn
       |> thread(close!(q))
+      |> see_results()
       |> assert_has("form[data-role=poll][data-state=no_consensus]")
     end
 
     test "a poll closed without votes reports closed_empty", %{conn: conn, me: me} do
       conn
       |> thread(close!(open_poll(me, "single")))
+      |> see_results()
       |> assert_has("form[data-role=poll][data-state=closed_empty]")
     end
   end
@@ -138,6 +148,7 @@ defmodule Bonfire.Poll.Web.PollMarkupTest do
 
       conn
       |> thread(q)
+      |> see_results()
       |> assert_has("[data-role=reaction-strip]", count: 2)
       |> assert_has("[data-role=reaction-strip] [data-bucket='2'][data-mine]")
       |> assert_has("[data-role=reaction-strip] [data-bucket='-1'][data-mine]")
