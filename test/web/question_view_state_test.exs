@@ -12,8 +12,45 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
   import Bonfire.Me.Fake
   import Bonfire.Poll.Fake
 
+  import Bonfire.Common.Testing, only: [count_queries: 1]
+
   alias Bonfire.Poll.Votes
   alias Bonfire.Poll.Web.Preview.QuestionLive, as: Q
+
+  # the view state with the tallies loaded, as after "See results"
+  defp view_state_with_tallies(question, user \\ nil),
+    do: Q.view_state(question, false, user, Votes.preview_vote_state_for_question(question, user))
+
+  test "with no vote state given, view_state loads no tallies and runs no query" do
+    author = fake_user!()
+
+    {:ok, question} =
+      fake_question_with_choices(
+        %{voting_format: "single", voting_dates: [DateTime.utc_now()]},
+        [%{name: "A"}, %{name: "B"}],
+        current_user: author
+      )
+
+    assert {:ok, _} =
+             Votes.vote(fake_user!(), question, [%{choice_id: hd(question.choices).id, weight: 1}])
+
+    {state, queries} = count_queries(fn -> Q.view_state(question, false, nil) end)
+
+    refute state.tallies_loaded
+    assert state.total_votes == 0
+    assert queries == 0
+  end
+
+  test "a vote state without the tallies_loaded key is read as loaded (the widget passes one)" do
+    {:ok, question} =
+      fake_question_with_choices(
+        %{voting_format: "single", voting_dates: [DateTime.utc_now()]},
+        [%{name: "A"}, %{name: "B"}],
+        current_user: fake_user!()
+      )
+
+    assert Q.view_state(question, false, nil, Votes.empty_preview_vote_state()).tallies_loaded
+  end
 
   test "total_votes and per-choice counts include all voters, and pick the winner" do
     author = fake_user!()
@@ -36,7 +73,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
       assert {:ok, _} = Votes.vote(v, question, [%{choice_id: b.id, weight: 1}])
     end)
 
-    state = Q.view_state(question)
+    state = view_state_with_tallies(question)
 
     assert state.total_votes == 5
     assert state.counts_by_choice_id[a.id] == 3
@@ -66,7 +103,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
     assert {:ok, _} = pick.(v3, [a])
     assert {:ok, _} = pick.(v4, [b, c])
 
-    state = Q.view_state(question)
+    state = view_state_with_tallies(question)
 
     assert state.counts_by_choice_id == %{a.id => 3, b.id => 2, c.id => 2}
     assert state.total_votes == 7
@@ -86,7 +123,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
     # A 5th voter brings B level with A: both win
     assert {:ok, _} = pick.(v5, [b])
 
-    state = Q.view_state(question)
+    state = view_state_with_tallies(question)
 
     assert state.counts_by_choice_id == %{a.id => 3, b.id => 3, c.id => 2}
     assert state.total_votes == 8
@@ -133,7 +170,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
     assert {:ok, _} = react.(p6, [{b, -1}, {d, 0}])
     assert {:ok, _} = react.(p7, [{c, "∞"}])
 
-    state = Q.view_state(question)
+    state = view_state_with_tallies(question)
 
     assert state.score_histogram_by_choice_id == %{
              a.id => %{2 => 3, -1 => 1},
@@ -160,7 +197,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
         [%{name: "A"}, %{name: "B"}]
       )
 
-    state = Q.view_state(question)
+    state = view_state_with_tallies(question)
 
     assert state.total_votes == 0
     assert state.winning_ids == []
@@ -184,12 +221,12 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
     assert {:ok, _} = Votes.vote(alice, question, [%{choice_id: a.id, weight: 1}])
 
     # Alice sees her own vote.
-    alice_state = Q.view_state(question, false, alice)
+    alice_state = view_state_with_tallies(question, alice)
     assert alice_state.has_voted
     assert Map.has_key?(alice_state.my_votes, a.id)
 
     # Bob, who hasn't voted, sees no "Your vote".
-    bob_state = Q.view_state(question, false, bob)
+    bob_state = view_state_with_tallies(question, bob)
     refute bob_state.has_voted
     assert bob_state.my_votes == %{}
 
@@ -213,7 +250,7 @@ defmodule Bonfire.Poll.Web.Preview.QuestionViewStateTest do
     assert {:ok, _} = Votes.vote(fake_user!(), question, [%{choice_id: a.id, weight: "∞"}])
     assert {:ok, _} = Votes.vote(fake_user!(), question, [%{choice_id: b.id, weight: 2}])
 
-    state = Q.view_state(question)
+    state = view_state_with_tallies(question)
 
     assert a.id in state.vetoed_ids
     refute b.id in state.vetoed_ids

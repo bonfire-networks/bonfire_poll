@@ -107,7 +107,12 @@
                           </div>
                       {/case}
 
-                      <QuestionLive object={poll} vote_state={vote_state} />
+                      <QuestionLive
+                        id={"poll_question_#{id(poll)}"}
+                        object={poll}
+                        vote_state={vote_state}
+                        hide_results
+                      />
                     </div>
                   </StatefulComponent>
               {/case}

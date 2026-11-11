@@ -5,16 +5,7 @@ defmodule Bonfire.Poll.LiveHandler do
   alias Bonfire.Poll.{Questions, Presets}
   alias Bonfire.Common.Types
 
-  defp path_for_question(id, opts) when is_binary(id) do
-    case Questions.read(id, opts) do
-      {:ok, q} -> path(q)
-      _ -> nil
-    end
-  rescue
-    _ -> nil
-  end
-
-  defp path_for_question(_, _), do: nil
+  # `path_for_question/2` moved to `Bonfire.Poll.Web.Preview.QuestionLive`, with "submit_proposal"
 
   defp preset_params_from_form(params) do
     tuning = Map.new(Presets.tuning_keys(), &{&1, parse_bool(params["poll_tuning_#{&1}"])})
@@ -202,71 +193,6 @@ defmodule Bonfire.Poll.LiveHandler do
   defp safe_tuning_key(key) do
     keys = Presets.tuning_keys()
     Enum.find(keys, List.first(keys), fn k -> Atom.to_string(k) == to_string(key) end)
-  end
-
-  def handle_event(
-        "submit_proposal",
-        %{"question_id" => question_id, "proposal" => %{"name" => name}},
-        socket
-      ) do
-    case Bonfire.Poll.Choices.add_proposal(
-           question_id,
-           %{name: name},
-           current_user: current_user(socket)
-         ) do
-      {:ok, _choice} ->
-        # `push_navigate` to the same URL forces the LV to re-fetch the
-        # question and pick up the newly-inserted choice.
-        socket =
-          case path_for_question(question_id, current_user: current_user(socket)) do
-            nil -> socket
-            path -> Phoenix.LiveView.push_navigate(socket, to: path)
-          end
-
-        {:noreply, assign_flash(socket, :info, l("Proposal added."))}
-
-      {:error, :proposal_phase_closed} ->
-        {:noreply, assign_error(socket, l("The proposal phase is not currently open."))}
-
-      {:error, :not_authorized} ->
-        {:noreply,
-         assign_error(socket, l("You don't have permission to suggest options for this poll."))}
-
-      {:error, :name_required} ->
-        {:noreply, assign_error(socket, l("Please enter the option text."))}
-
-      {:error, :unauthorized} ->
-        {:noreply, assign_error(socket, l("You need to sign in first."))}
-
-      {:error, :not_found} ->
-        {:noreply, assign_error(socket, l("Poll not found."))}
-
-      other ->
-        error(other, "submit_proposal failed")
-        {:noreply, assign_error(socket, l("Could not add proposal."))}
-    end
-  end
-
-  def handle_event("submit_vote", %{"question_id" => question} = params, socket) do
-    voter = current_user(socket)
-
-    # Guard explicitly: `Votes.vote(nil, …)` would otherwise return the
-    # misleading "Voting is not open" rather than prompting a sign-in.
-    case voter && Bonfire.Poll.Votes.vote(voter, question, parse_votes(params)) do
-      nil ->
-        {:noreply, assign_error(socket, l("You need to sign in to vote."))}
-
-      {:ok, _result} ->
-        {:noreply, assign_flash(socket, :info, l("Thanks for participating!"))}
-
-      {:error, msg} when is_binary(msg) ->
-        {:noreply, assign_error(socket, msg)}
-
-      other ->
-        # Defensive: log + swallow unexpected return shapes from Votes.vote/4.
-        error(other, "submit_vote: unexpected vote result")
-        {:noreply, assign_error(socket, l("Sorry, you can't vote on this poll."))}
-    end
   end
 
   @doc """

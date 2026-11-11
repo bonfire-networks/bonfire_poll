@@ -270,8 +270,8 @@ defmodule Bonfire.Poll.Questions do
   choices preloaded so the full preview can render. Cached per limit for 1h, once for guests and once for everyone signed in, each loaded as that circle (`Bonfire.Boundaries.Circles.query_as_circle/1`) rather than as one user, so nobody's restricted polls reach anyone else (the widget then drops what each viewer may not see, eg. from someone they blocked), and self-busts
   when most of the cached polls have already ended (so a stale list doesn't linger). Pass the
   standard `:cache` opt (`cache: :refresh` busts + recomputes — the widget's manual refresh button;
-  the key is built once by `closing_soon_cache_key/2`). (Vote counts and the viewer's own votes are
-  read fresh by the widget, not cached, so tallies and "you've voted" never lag a vote.)
+  the key is built once by `closing_soon_cache_key/2`). (The widget shows no vote counts; it drops
+  ended polls and the ones the viewer voted on when rendering.)
   """
   def closing_soon_widget(current_user, limit, opts \\ []) do
     {circle, as_circle_opts} = Bonfire.Boundaries.Circles.query_as_circle(current_user)
@@ -305,9 +305,7 @@ defmodule Bonfire.Poll.Questions do
 
   defp do_closing_soon(limit, as_circle_opts) do
     polls = list_closing_soon(as_circle_opts, limit)
-    # Per-choice counts and the viewer's own votes are read fresh at render time
-    # by the widget (via `Votes.preview_vote_state_for_questions/2`), so they're
-    # not cached here — only the poll list itself is.
+    # Only the poll list is cached; the widget shows no counts or own votes.
     %{polls: polls}
   end
 

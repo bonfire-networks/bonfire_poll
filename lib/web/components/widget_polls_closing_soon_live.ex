@@ -21,19 +21,25 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
   prop widget_title, :string, default: nil
 
   @doc """
-  Returns `%{polls: [...], vote_state: %{question_id => state}}` — the poll rows
-  plus the batched read model (`counts`, `vetoes`, the viewer's own votes and the
-  score histograms) for all of them, keyed by question id for `QuestionLive` to
-  look up.
+  Returns `%{polls: [...], vote_state: ...}` — the poll rows plus an empty vote
+  state, so `QuestionLive` shows no results and runs no vote query.
 
-  The poll list is cached per user and limit for 1 hour; `vote_state` is read
-  fresh on each render — in 3 batched queries regardless of poll count — so
-  tallies and the viewer's "you've voted" state never lag their vote.
+  The poll list is cached once per circle (guests, or everyone signed in) for 1
+  hour, and no query runs per viewer. At render time it drops the polls that have
+  ended (from the cached voting dates) and the ones the viewer voted on (from the
+  per-user cache of voted ids that `Votes.vote/4` writes; a miss counts as none voted).
   """
   def load(current_user, limit) do
     %{polls: polls} = Questions.closing_soon_widget(current_user, limit)
-    vote_state = Votes.preview_vote_state_for_questions(polls, current_user)
-    %{polls: polls, vote_state: vote_state}
+    voted_ids = Votes.cached_voted_question_ids(current_user)
+
+    polls =
+      Enum.reject(polls, fn poll ->
+        Questions.voting_ended?(poll) or MapSet.member?(voted_ids, id(poll))
+      end)
+
+    # empty on purpose: the widget shows no results, so no vote query runs per viewer
+    %{polls: polls, vote_state: Votes.empty_preview_vote_state()}
   end
 
   @doc "Busts the closing-soon cache for the current viewer (recomputed lazily on next read)."
@@ -44,7 +50,10 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
      assign_flash(
        socket,
        :info,
-       l("Polls have been reset.") <> " " <> l("You need to reload to see updates, if any.")
+       # l("Polls have been reset.") <> " " <> l("You need to reload to see updates, if any.")
+       l(
+         "The list of polls will update when you reload the page, and for everyone else on their next page load."
+       )
      )}
   end
 

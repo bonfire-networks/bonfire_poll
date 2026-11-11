@@ -285,9 +285,24 @@ defmodule Bonfire.Poll.Votes do
   """
   def preview_vote_state_for_questions(questions, current_user \\ nil) do
     question_ids = question_ids(questions)
+    tallies = tallies_for_questions(question_ids)
+    my_votes_by_question = my_votes_for_questions(current_user, question_ids)
+
+    Map.new(question_ids, fn question_id ->
+      {question_id,
+       tallies
+       |> Map.fetch!(question_id)
+       |> Map.put(:my_vote_weights, Map.get(my_votes_by_question, question_id, %{}))}
+    end)
+  end
+
+  @doc """
+  The tallies of many questions, keyed by question id, in two queries (the per-choice vote-weight histogram and the distinct voter count). Each value has `:counts_by_choice_id`, `:vetoed_choice_ids`, `:score_histogram_by_choice_id` and `:voter_count`, as in `preview_vote_state_for_questions/2`, without the viewer's own votes.
+  """
+  def tallies_for_questions(questions) do
+    question_ids = question_ids(questions)
     histograms_by_question = score_histogram_for_questions(question_ids)
     voters_by_question = voter_counts_for_questions(question_ids)
-    my_votes_by_question = voter_choice_weights_for_questions(current_user, question_ids)
 
     Map.new(question_ids, fn question_id ->
       histograms = Map.get(histograms_by_question, question_id, %{})
@@ -296,12 +311,17 @@ defmodule Bonfire.Poll.Votes do
        %{
          counts_by_choice_id: counts_from_histograms(histograms),
          vetoed_choice_ids: vetoed_from_histograms(histograms),
-         my_vote_weights: Map.get(my_votes_by_question, question_id, %{}),
          score_histogram_by_choice_id: histograms,
          voter_count: Map.get(voters_by_question, question_id, 0)
        }}
     end)
   end
+
+  @doc """
+  The viewer's own votes on many questions, keyed by question id (`%{question_id => %{choice_id => weight}}`), in one query; no query for a nil viewer.
+  """
+  def my_votes_for_questions(voter, questions),
+    do: voter_choice_weights_for_questions(voter, questions)
 
   # `counts_by_choice_id` and `vetoed_choice_ids` are derived in-memory from the
   # per-choice vote-weight histogram (a strict superset of both) instead of being
@@ -478,9 +498,41 @@ defmodule Bonfire.Poll.Votes do
                |> Enum.map(&register_vote_choice(voter, question, &1, opts))
                |> all_oks_or_error(),
              {:ok, vote_activity} <- send_vote_activity(voter, question, votes, opts) do
+          remember_voted(voter, question)
           {:ok, vote_activity}
         end
       end
+    end
+  end
+
+  defp voted_cache_key(voter), do: "poll_voted_question_ids:#{id(voter)}"
+
+  # How long the per-user list of voted question ids is kept; a restart or expiry just means
+  # voted polls can show again in the dashboard widget until the next vote.
+  defp voted_cache_ttl,
+    do: Config.get([:bonfire_poll, :voted_ids_cache_ttl], to_timeout(hour: 24))
+
+  @doc """
+  Question ids the user voted on since their list was last cached (a cache read only, never a query;
+  an empty set on a miss). Written by `vote/4`, read by the "Polls closing soon" widget to hide polls
+  the viewer already voted on.
+  """
+  def cached_voted_question_ids(nil), do: MapSet.new()
+
+  def cached_voted_question_ids(voter) do
+    case Cache.get(voted_cache_key(voter)) do
+      {:ok, %MapSet{} = ids} -> ids
+      _ -> MapSet.new()
+    end
+  end
+
+  defp remember_voted(voter, question) do
+    if id(voter) do
+      Cache.put(
+        voted_cache_key(voter),
+        MapSet.put(cached_voted_question_ids(voter), id(question)),
+        expire: voted_cache_ttl()
+      )
     end
   end
 

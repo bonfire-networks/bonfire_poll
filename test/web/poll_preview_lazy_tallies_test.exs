@@ -1,0 +1,306 @@
+defmodule Bonfire.Poll.Web.PollPreviewLazyTalliesTest do
+  @moduledoc """
+  A poll preview in a feed loads no tallies on render: the counts come only from "See results", the viewer's own votes load in one batched query per page (none for guests), and a closed poll's tallies are cached.
+  """
+  use Bonfire.Poll.ConnCase, async: false
+  import PhoenixTest
+
+  alias Bonfire.Me.Fake
+  alias Bonfire.Poll.Votes
+
+  @moduletag :ui
+
+  setup do
+    account = Fake.fake_account!()
+    me = Fake.fake_user!(account)
+    other = Fake.fake_user!()
+    {:ok, conn: conn(user: me, account: account), me: me, other: other}
+  end
+
+  defp open_poll(creator, name, extra \\ %{}) do
+    now = DateTime.utc_now()
+
+    {:ok, q} =
+      fake_question_with_choices(
+        Map.merge(
+          %{
+            post_content: %{html_body: name},
+            voting_format: "single",
+            voting_dates: [DateTime.add(now, -60), DateTime.add(now, 3600)]
+          },
+          extra
+        ),
+        [%{name: "#{name} alpha"}, %{name: "#{name} beta"}],
+        current_user: creator,
+        boundary: "public"
+      )
+
+    q
+  end
+
+  # votes can only be cast while the poll is open, so close it by moving the deadline into the past once they are in
+  defp close!(question) do
+    [start | _] = question.voting_dates
+    ended = DateTime.add(DateTime.utc_now(), -60, :second)
+
+    {:ok, closed} =
+      Bonfire.Common.Repo.update(Ecto.Changeset.change(question, voting_dates: [start, ended]))
+
+    closed
+  end
+
+  defp vote!(voter, question, choice),
+    do: assert({:ok, _} = Votes.vote(voter, question, [%{choice_id: choice.id, weight: 1}]))
+
+  # Records the SQL of every query made by any process while `fun` runs (this module is not async, so nothing else is querying).
+  defp queries_during(fun) do
+    handler_id = {__MODULE__, make_ref()}
+    test_pid = self()
+    event = Bonfire.Common.Config.repo().config()[:telemetry_prefix] ++ [:query]
+
+    :telemetry.attach(
+      handler_id,
+      event,
+      fn _event, _measurements, meta, _config -> send(test_pid, {:sql, meta[:query]}) end,
+      nil
+    )
+
+    try do
+      fun.()
+    after
+      :telemetry.detach(handler_id)
+    end
+
+    collect_sql([])
+  end
+
+  defp collect_sql(acc) do
+    receive do
+      {:sql, sql} -> collect_sql([sql | acc])
+    after
+      200 -> acc
+    end
+  end
+
+  # the tally queries aggregate the vote edges (histogram, distinct voters); the viewer's own votes query does not
+  # (the ranked table also orders a poll's choices, so the votes table is part of the match)
+  defp tally_query?(sql),
+    do: sql =~ ~r/bonfire_data_ranked/i and sql =~ ~r/bonfire_poll_vote/i and sql =~ ~r/count\(/i
+
+  defp own_votes_query?(sql),
+    do:
+      sql =~ ~r/bonfire_data_ranked/i and sql =~ ~r/bonfire_poll_vote/i and
+        not (sql =~ ~r/count\(/i)
+
+  test "a feed renders polls with no counts and runs no tally query", %{
+    conn: conn,
+    me: me,
+    other: other
+  } do
+    # a feed page holds 2 activities in tests
+    polls = for n <- 1..2, do: open_poll(me, "Lazy poll #{n}")
+    vote!(other, hd(polls), hd(hd(polls).choices))
+
+    sql =
+      queries_during(fn ->
+        conn
+        |> visit("/feed")
+        |> wait_async()
+        |> assert_has("[data-id=activity_question]", count: 2)
+        # each poll is its own stateful component, so it can batch over the page and handle "See results"
+        |> assert_has("[data-role=poll_preview][data-phx-component]", count: 2)
+        |> refute_has("[data-role=vote-count]")
+        |> refute_has("[data-role=choice-count]")
+      end)
+
+    assert Enum.count(sql, &tally_query?/1) == 0
+    # one batch per render (dead and live) at most, not one per poll
+    assert Enum.count(sql, &own_votes_query?/1) in 1..2
+  end
+
+  test "a guest's feed runs no vote query for open polls", %{me: me} do
+    open_poll(me, "Guest open poll")
+
+    sql =
+      queries_during(fn ->
+        build_conn_guest()
+        |> visit("/feed")
+        |> wait_async()
+        |> assert_has("[data-id=activity_question]")
+        |> refute_has("[data-role=vote-count]")
+      end)
+
+    assert Enum.count(sql, &(tally_query?(&1) or own_votes_query?(&1))) == 0
+  end
+
+  defp build_conn_guest, do: conn()
+
+  test "a guest on an open poll gets a Vote link to the remote interaction page", %{me: me} do
+    q = open_poll(me, "Guest vote link")
+
+    build_conn_guest()
+    |> visit("/discussion/#{q.id}")
+    |> wait_async()
+    |> assert_has("[data-role=sign-in-to-vote][href*='remote_interaction?type=vote']",
+      text: "Vote"
+    )
+  end
+
+  test "a guest sees the results of a closed poll", %{me: me, other: other} do
+    q = open_poll(me, "Guest closed poll")
+    vote!(other, q, hd(q.choices))
+    q = close!(q)
+
+    build_conn_guest()
+    |> visit("/discussion/#{q.id}")
+    |> wait_async()
+    |> assert_has("[data-role=vote-count]", text: "1 vote")
+  end
+
+  test "a voted viewer sees their pick and no counts until they click See results", %{
+    conn: conn,
+    me: me,
+    other: other
+  } do
+    q = open_poll(me, "Voted poll")
+    vote!(me, q, hd(q.choices))
+    vote!(other, q, List.last(q.choices))
+
+    conn
+    |> visit("/discussion/#{q.id}")
+    |> wait_async()
+    |> assert_has("[data-role=voted-indicator]")
+    |> refute_has("[data-role=submit-vote]")
+    |> refute_has("[data-role=vote-count]")
+    |> click_button("[data-role=results-toggle]", "See results")
+    |> assert_has("[data-role=vote-count]", text: "2 votes")
+  end
+
+  test "See results shows the counts", %{conn: conn, me: me, other: other} do
+    a = open_poll(me, "Click poll")
+    vote!(other, a, hd(a.choices))
+
+    conn
+    |> visit("/discussion/#{a.id}")
+    |> wait_async()
+    |> refute_has("[data-role=vote-count]")
+    |> click_button("[data-role=results-toggle]", "See results")
+    |> assert_has("[data-role=vote-count]", text: "1 vote")
+  end
+
+  test "right after voting the results show without a click", %{conn: conn, me: me} do
+    q = open_poll(me, "Just voted poll")
+
+    conn
+    |> visit("/discussion/#{q.id}")
+    |> wait_async()
+    |> refute_has("[data-role=vote-count]")
+    |> choose("Just voted poll alpha")
+    |> click_button("[data-role=submit-vote]", "Vote")
+    |> wait_async()
+    |> assert_has("[data-role=vote-count]", text: "1 vote")
+  end
+
+  test "a closed poll's tallies are cached after the first read", %{me: me, other: other} do
+    q = open_poll(me, "Cached closed poll")
+    vote!(other, q, hd(q.choices))
+    q = close!(q)
+
+    visit_closed = fn ->
+      build_conn_guest()
+      |> visit("/discussion/#{q.id}")
+      |> wait_async()
+      |> assert_has("[data-role=vote-count]", text: "1 vote")
+    end
+
+    first = queries_during(visit_closed)
+    second = queries_during(visit_closed)
+
+    assert Enum.count(first, &tally_query?/1) > 0
+    assert Enum.count(second, &tally_query?/1) == 0
+  end
+
+  test "the cached tallies of several closed polls are read in one batched cache call", %{
+    me: me,
+    other: other
+  } do
+    qs =
+      for title <- ["Closed A", "Closed B"] do
+        q = open_poll(me, title)
+        vote!(other, q, hd(q.choices))
+        close!(q)
+      end
+
+    visit_feed = fn ->
+      build_conn_guest()
+      |> visit("/feed/local")
+      |> wait_async()
+      |> assert_has("[data-role=vote-count]", text: "1 vote")
+    end
+
+    # warm the cache, then count the cache reads of a second visit
+    visit_feed.()
+
+    :erlang.trace_pattern({Bonfire.Common.Cache, :get_many, :_}, true, [:global])
+    :erlang.trace_pattern({Bonfire.Common.Cache, :get!, :_}, true, [:global])
+    :erlang.trace(:all, true, [:call, tracer: self()])
+
+    try do
+      visit_feed.()
+    after
+      :erlang.trace(:all, false, [:call])
+      :erlang.trace_pattern({Bonfire.Common.Cache, :_, :_}, false, [:global])
+    end
+
+    calls = collect_traced([])
+
+    tally_keys = fn args -> inspect(args) =~ "bonfire_poll:closed_tallies:" end
+
+    many = Enum.filter(calls, fn {fun, args} -> fun == :get_many and tally_keys.(args) end)
+    single = Enum.filter(calls, fn {fun, args} -> fun == :get! and tally_keys.(args) end)
+
+    assert length(qs) == 2
+    assert length(many) == 1
+    assert single == []
+    [{:get_many, [keys | _]}] = many
+    assert length(keys) == 2
+  end
+
+  test "a signed-in viewer's results check for a closed poll runs once per render", %{
+    conn: conn,
+    me: me,
+    other: other
+  } do
+    q = open_poll(me, "Checked once closed poll")
+    vote!(other, q, hd(q.choices))
+    q = close!(q)
+
+    :erlang.trace_pattern({Bonfire.Poll.Questions, :results_visible?, :_}, true, [:global])
+    :erlang.trace(:all, true, [:call, tracer: self()])
+
+    try do
+      conn
+      |> visit("/discussion/#{q.id}")
+      |> wait_async()
+      |> assert_has("[data-role=results-toggle]", text: "See results")
+    after
+      :erlang.trace(:all, false, [:call])
+      :erlang.trace_pattern({Bonfire.Poll.Questions, :_, :_}, false, [:global])
+    end
+
+    calls = collect_traced(Bonfire.Poll.Questions, [])
+
+    assert length(calls) == 1
+  end
+
+  defp collect_traced(acc), do: collect_traced(Bonfire.Common.Cache, acc)
+
+  defp collect_traced(mod, acc) do
+    receive do
+      {:trace, _pid, :call, {^mod, fun, args}} ->
+        collect_traced(mod, [{fun, args} | acc])
+    after
+      200 -> acc
+    end
+  end
+end

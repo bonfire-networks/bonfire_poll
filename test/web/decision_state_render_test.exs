@@ -73,6 +73,7 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
 
     conn
     |> thread(close!(q))
+    |> click_button("[data-role=results-toggle]", "See results")
     |> assert_has("[data-role=poll-state-label]", text: "Closed")
     |> assert_has("[data-role=choice-participation]")
     |> refute_has("[data-role=choice-carried]")
@@ -87,6 +88,7 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
 
     conn
     |> thread(close!(q))
+    |> click_button("[data-role=results-toggle]", "See results")
     |> assert_has("[data-role=poll-state-label]", text: "Closed")
     |> refute_has("[data-role=choice-blocked]")
     |> refute_has("[data-role=outcome]")
@@ -100,6 +102,7 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
 
     conn
     |> thread(close!(q))
+    |> click_button("[data-role=results-toggle]", "See results")
     |> assert_has("[data-role=poll-state-label]", text: "Closed")
     |> refute_has("[data-role=outcome]")
   end
@@ -107,6 +110,7 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
   test ":closed_empty when the poll closed with no votes", %{conn: conn, me: me} do
     conn
     |> thread(close!(open_consent(me)))
+    |> click_button("[data-role=results-toggle]", "See results")
     |> assert_has("[data-role=outcome]", text: "Closed with no votes")
   end
 
@@ -129,6 +133,7 @@ defmodule Bonfire.Poll.Web.DecisionStateRenderTest do
 
     conn
     |> thread(close!(q))
+    |> click_button("[data-role=results-toggle]", "See results")
     |> assert_has("[data-role=outcome]", text: "Top pick")
   end
 end

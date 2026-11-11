@@ -85,6 +85,8 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     |> wait_async()
     # TEMP: preview the new result design, remove before commit
     # |> PhoenixTest.open_browser()
+    # the viewer voted, so the reactions load on "See results"
+    |> click_button("[data-role=results-toggle]", "See results")
     |> refute_has("[data-role=choice-participation]")
     |> assert_has("[data-role=reaction-strip]", count: 2)
     # alpha
@@ -170,6 +172,9 @@ defmodule Bonfire.Poll.Web.PollInFeedTest do
     |> visit("/feed")
     |> wait_async()
     |> assert_has_or_open_browser("[data-role=submit-vote]")
+    # the tallies load on "See results", not on render
+    |> refute_has("[data-role=vote-count]")
+    |> click_button("[data-role=results-toggle]", "See results")
     |> assert_has_or_open_browser("[data-role=vote-count]", text: "0 votes")
   end
 

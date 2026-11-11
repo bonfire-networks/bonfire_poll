@@ -1,230 +1,239 @@
-{#case view_state(@object, @is_remote, current_user(@__context__), @vote_state)}
-  {#match %{
-      choices: choices,
-      has_voted: has_voted,
-      counts_by_choice_id: counts_by_choice_id,
-      my_votes: my_votes,
-      vetoed_ids: vetoed_ids,
-      end_time: end_time,
-      closed: closed,
-      locked: locked,
-      results_visible: results_visible,
-      results_toggleable: results_toggleable,
-      winning_ids: winning_ids,
-      voting_format: voting_format,
-      total_votes: total_votes,
-      voter_count: voter_count,
-      proposal_open: proposal_open,
-      time_remaining_label: time_remaining_label,
-      proposal_end_label: proposal_end_label,
-      question_without_choices: question_without_choices,
-      score_histogram_by_choice_id: score_histogram_by_choice_id
-    }}
-    {#case Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}
-      {#match poll_id_prefix}
-        <div
-          data-id="activity_question"
-          data-rendered={@showing_within}
-          data-main-object={@viewing_main_object}
-          x-data="{expanded: false, expandable: $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight, showResults: false, content_open: false}"
-          x-transition
-          x-ref="question_container"
-          class="previewable_activity cursor-pointer mt-0.5 -mx-4"
-        >
-          {#case e(post_content(@object), :name, nil)}
-            {#match nil}
-            {#match name}
-              <div
-                :if={name != @thread_title}
-                class={[
-                  "w-full h-auto max-w-full p-0 m-0 my-1 font-medium",
-                  "text-base": @viewing_main_object != true,
-                  "text-xl": @viewing_main_object == true
-                ]}
-              >
-                {rich(name)}
-              </div>
-          {/case}
-
-          {#if @cw && e(post_content(@object), :html_body, nil)}
-            <div class="flex items-baseline gap-2 mb-2 px-4">
-              <p>
-                <span class="prose max-w-prose prose-p:pt-1">{l("Content Warning")}</span>
-                {#if !@hide_actions}
-                  <button
-                    x-on:click="content_open = ! content_open; $nextTick(() => { expandable = $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight });"
-                    x-text={"content_open ? '#{l("Show less")}' : '#{l("Show more")}'"}
-                    class="show_more_toggle_action ml-1 normal-case !border !border-divider btn-outline btn btn-sm"
-                  >
-                    {l("Show more")}
-                  </button>
-                {#else}
-                  <div class="ml-1 normal-case !border !border-divider btn-outline btn btn-sm">
-                    {l("Show more")}
-                  </div>
-                {/if}
-              </p>
-            </div>
-          {/if}
-
-          <div x-show={if @cw, do: "content_open"} x-cloak={@cw} x-collapse={@cw}>
-            {#case e(post_content(@object), :html_body, nil)}
+<div class="contents" data-role="poll_preview">
+  {!-- a stateful component needs one static tag at its root; `contents` keeps it out of the layout --}
+  {#case view_state(@object, @is_remote, current_user(@__context__), @vote_state || @qstate, @hide_results)}
+    {#match %{
+        choices: choices,
+        has_voted: has_voted,
+        counts_by_choice_id: counts_by_choice_id,
+        my_votes: my_votes,
+        vetoed_ids: vetoed_ids,
+        end_time: end_time,
+        closed: closed,
+        locked: locked,
+        results_visible: results_visible,
+        results_toggleable: results_toggleable,
+        results_peeking: results_peeking,
+        can_load_results: can_load_results,
+        tallies_loaded: tallies_loaded,
+        winning_ids: winning_ids,
+        voting_format: voting_format,
+        total_votes: total_votes,
+        voter_count: voter_count,
+        proposal_open: proposal_open,
+        time_remaining_label: time_remaining_label,
+        proposal_end_label: proposal_end_label,
+        question_without_choices: question_without_choices,
+        score_histogram_by_choice_id: score_histogram_by_choice_id
+      }}
+      {#case Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}
+        {#match poll_id_prefix}
+          <div
+            data-id="activity_question"
+            data-rendered={@showing_within}
+            data-main-object={@viewing_main_object}
+            x-data="{expanded: false, expandable: $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight, showResults: false, content_open: false}"
+            x-transition
+            x-ref="question_container"
+            class="previewable_activity cursor-pointer mt-0.5 -mx-4"
+          >
+            {#case e(post_content(@object), :name, nil)}
               {#match nil}
-              {#match html_body}
+              {#match name}
                 <div
-                  x-ref="note"
-                  data-id="object_body"
-                  data-inception={@activity_inception}
-                  data-rendered={@showing_within}
-                  data-main-object={@viewing_main_object}
+                  :if={name != @thread_title}
                   class={[
-                    # poll question = the post body; its size and weight are preset tokens
-                    "object_body px-4 prose-bonfire translatable prose break-normal max-w-none text-base-content",
-                    "[font-size:var(--poll-question-size)] [line-height:var(--poll-question-leading)] [font-weight:var(--poll-question-weight)] [&_p]:[font:inherit] prose-p:my-1",
-                    "prose-hr:!my-2 prose-br:hidden",
-                    previewable_truncate: !@viewing_main_object
+                    "w-full h-auto max-w-full p-0 m-0 my-1 font-medium",
+                    "text-base": @viewing_main_object != true,
+                    "text-xl": @viewing_main_object == true
                   ]}
-                  :class="{'previewable_expanded': expanded}"
                 >
-                  {rich(html_body,
-                    skip_markdown: @is_remote || @showing_within == :search,
-                    __unsafe__: !@is_remote
-                  )}
+                  {rich(name)}
                 </div>
             {/case}
-          </div>
 
-          {#if choices != []}
-            {!-- Gate on `proposal_open` (pre-computed), not `proposal_dates != []`:
+            {#if @cw && e(post_content(@object), :html_body, nil)}
+              <div class="flex items-baseline gap-2 mb-2 px-4">
+                <p>
+                  <span class="prose max-w-prose prose-p:pt-1">{l("Content Warning")}</span>
+                  {#if !@hide_actions}
+                    <button
+                      x-on:click="content_open = ! content_open; $nextTick(() => { expandable = $refs.note && $refs.note.scrollHeight > $refs.note.clientHeight });"
+                      x-text={"content_open ? '#{l("Show less")}' : '#{l("Show more")}'"}
+                      class="show_more_toggle_action ml-1 normal-case !border !border-divider btn-outline btn btn-sm"
+                    >
+                      {l("Show more")}
+                    </button>
+                  {#else}
+                    <div class="ml-1 normal-case !border !border-divider btn-outline btn btn-sm">
+                      {l("Show more")}
+                    </div>
+                  {/if}
+                </p>
+              </div>
+            {/if}
+
+            <div x-show={if @cw, do: "content_open"} x-cloak={@cw} x-collapse={@cw}>
+              {#case e(post_content(@object), :html_body, nil)}
+                {#match nil}
+                {#match html_body}
+                  <div
+                    x-ref="note"
+                    data-id="object_body"
+                    data-inception={@activity_inception}
+                    data-rendered={@showing_within}
+                    data-main-object={@viewing_main_object}
+                    class={[
+                      # poll question = the post body; its size and weight are preset tokens
+                      "object_body px-4 prose-bonfire translatable prose break-normal max-w-none text-base-content",
+                      "[font-size:var(--poll-question-size)] [line-height:var(--poll-question-leading)] [font-weight:var(--poll-question-weight)] [&_p]:[font:inherit] prose-p:my-1",
+                      "prose-hr:!my-2 prose-br:hidden",
+                      previewable_truncate: !@viewing_main_object
+                    ]}
+                    :class="{'previewable_expanded': expanded}"
+                  >
+                    {rich(html_body,
+                      skip_markdown: @is_remote || @showing_within == :search,
+                      __unsafe__: !@is_remote
+                    )}
+                  </div>
+              {/case}
+            </div>
+
+            {#if choices != []}
+              {!-- Gate on `proposal_open` (pre-computed), not `proposal_dates != []`:
              `proposal_dates` persists past the phase end, so the bare check
              would keep blocking voting after suggestions close. --}
-            {#if proposal_open}
-              {!-- Same frame as the vote form: suggested options as read-only rows,
+              {#if proposal_open}
+                {!-- Same frame as the vote form: suggested options as read-only rows,
                    the suggestion field styled as one more row, and the meta line
                    last, naming the phase and when it ends. --}
-              <div class="mt-3 px-4 flex flex-col" data-role="proposal-phase">
-                <div class="flex flex-col gap-1.5">
-                  {#for {choice, idx} <- Enum.with_index(choices)}
-                    <ChoiceLive
-                      question={question_without_choices}
-                      object={choice}
-                      index={idx}
-                      viewing_main_object={@viewing_main_object}
-                      showing_within={@showing_within}
-                      is_remote={@is_remote}
-                      hide_actions={@hide_actions}
-                      voting_format={voting_format}
-                      compact={@viewing_main_object != true}
-                      vote={false}
-                      results_visible={false}
-                      proposal_phase
-                      show_author
-                      id_prefix={poll_id_prefix}
-                    />
-                  {/for}
-                </div>
+                <div class="mt-3 px-4 flex flex-col" data-role="proposal-phase">
+                  <div class="flex flex-col gap-1.5">
+                    {#for {choice, idx} <- Enum.with_index(choices)}
+                      <ChoiceLive
+                        question={question_without_choices}
+                        object={choice}
+                        index={idx}
+                        viewing_main_object={@viewing_main_object}
+                        showing_within={@showing_within}
+                        is_remote={@is_remote}
+                        hide_actions={@hide_actions}
+                        voting_format={voting_format}
+                        compact={@viewing_main_object != true}
+                        vote={false}
+                        results_visible={false}
+                        proposal_phase
+                        show_author
+                        id_prefix={poll_id_prefix}
+                      />
+                    {/for}
+                  </div>
 
-                {#if not is_nil(current_user_id(@__context__))}
-                  <form
-                    class="flex items-center gap-2 pt-1.5"
-                    phx-submit="Bonfire.Poll:submit_proposal"
-                    phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
-                    data-role="propose-form"
-                  >
-                    <input type="hidden" name="question_id" value={id(@object)}>
-                    <label
-                      for={"propose_#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}_#{id(@object)}"}
-                      class="sr-only"
+                  {#if not is_nil(current_user_id(@__context__))}
+                    <form
+                      class="flex items-center gap-2 pt-1.5"
+                      phx-submit="submit_proposal"
+                      phx-target={@myself}
+                      data-role="propose-form"
                     >
-                      {l("Your suggestion")}
-                    </label>
-                    <input
-                      type="text"
-                      id={"propose_#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}_#{id(@object)}"}
-                      name="proposal[name]"
-                      placeholder={l("Suggest an option")}
-                      required
-                      maxlength="200"
-                      class="poll-option flex-1 min-w-0 text-[15px] text-base-content placeholder:text-subtle focus:outline-2 focus:outline-offset-2 focus:outline-primary"
-                    />
-                    <button type="submit" data-role="propose-submit" class="btn btn-primary btn-sm">
-                      {l("Suggest")}
-                    </button>
-                  </form>
-                {/if}
+                      <input type="hidden" name="question_id" value={id(@object)}>
+                      <label
+                        for={"propose_#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}_#{id(@object)}"}
+                        class="sr-only"
+                      >
+                        {l("Your suggestion")}
+                      </label>
+                      <input
+                        type="text"
+                        id={"propose_#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}_#{id(@object)}"}
+                        name="proposal[name]"
+                        placeholder={l("Suggest an option")}
+                        required
+                        maxlength="200"
+                        class="poll-option flex-1 min-w-0 text-[15px] text-base-content placeholder:text-subtle focus:outline-2 focus:outline-offset-2 focus:outline-primary"
+                      />
+                      <button type="submit" data-role="propose-submit" class="btn btn-primary btn-sm">
+                        {l("Suggest")}
+                      </button>
+                    </form>
+                  {/if}
 
-                <div data-role="poll-meta" class="poll-meta-line">
-                  <span class="inline-flex items-center gap-1.5 font-medium text-(--poll-meta-strong)">
-                    <Iconify.iconify icon="ph:lightbulb" class="size-3.5 shrink-0" />
-                    {l("Proposal phase")}
-                  </span>
-                  {#case proposal_end_label}
-                    {#match nil}
-                    {#match label}
-                      <span class="poll-live">{label}</span>
-                  {/case}
+                  <div data-role="poll-meta" class="poll-meta-line">
+                    <span class="inline-flex items-center gap-1.5 font-medium text-(--poll-meta-strong)">
+                      <Iconify.iconify icon="ph:lightbulb" class="size-3.5 shrink-0" />
+                      {l("Proposal phase")}
+                    </span>
+                    {#case proposal_end_label}
+                      {#match nil}
+                      {#match label}
+                        <span class="poll-live">{label}</span>
+                    {/case}
+                  </div>
                 </div>
-              </div>
-            {#elseif e(@object, :voting_dates, nil) != false}
-              {#case decision_state(voting_format, closed, total_votes, vetoed_ids, winning_ids)}
-                {#match state}
-                  {!-- A wrapping flex row: blocks take the full width, and the meta
+              {#elseif e(@object, :voting_dates, nil) != false}
+                {!-- Without loaded tallies there are no totals to judge a closed poll by (eg. "no votes"), so it is just open or closed. --}
+                {#case if tallies_loaded,
+                    do: decision_state(voting_format, closed, total_votes, vetoed_ids, winning_ids),
+                    else: if(closed, do: :closed, else: :open)}
+                  {#match state}
+                    {!-- A wrapping flex row: blocks take the full width, and the meta
                    line shares the last row with the actions when they fit.
                    `data-format` / `data-state` drive which meta parts show. --}
-                  <form
-                    id={"vote-form-#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}-#{id(@object)}"}
-                    data-role="poll"
-                    data-format={voting_format}
-                    data-state={state}
-                    class="group/poll mt-3 px-4 flex flex-wrap items-center gap-x-4"
-                    phx-submit="Bonfire.Poll:submit_vote"
-                    phx-target={if @activity_component_id, do: "##{@activity_component_id}"}
-                    x-data="{ hasSelection: false }"
-                    x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
-                  >
-                    {!-- A standing objection while voting is still open reads as
+                    <form
+                      id={"vote-form-#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}-#{id(@object)}"}
+                      data-role="poll"
+                      data-format={voting_format}
+                      data-state={state}
+                      class="group/poll mt-3 px-4 flex flex-wrap items-center gap-x-4"
+                      phx-submit="submit_vote"
+                      phx-target={@myself}
+                      x-data="{ hasSelection: false }"
+                      x-on:change="hasSelection = $el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked') !== null"
+                    >
+                      {!-- A standing objection while voting is still open reads as
                      caution (warning), not finality (error): the group can still
                      resolve it before close. --}
-                    {#if state == :open and voting_format == "weighted_multiple" and vetoed_ids != []}
-                      <div
-                        class="basis-full mb-2.5 flex items-start gap-2 rounded-(--poll-card-radius) bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)] px-3.5 py-2.5 text-[13px]/[18px] text-[color-mix(in_oklab,var(--color-warning)_45%,var(--color-base-content))]"
-                        role="status"
-                        data-role="open-block-note"
-                      >
-                        <Iconify.iconify icon="ph:hand-palm-duotone" class="size-4 shrink-0 mt-px text-warning" />
-                        <span class="font-medium">{l("An objection is on the table. This option can't carry until it's resolved.")}</span>
-                      </div>
-                    {/if}
-
-                    {!-- Thread-only: the process rules, made legible on demand. --}
-                    {#if @viewing_main_object and voting_format == "weighted_multiple"}
-                      <details class="group/how basis-full mb-2.5" data-role="how-decided" x-on:click.stop>
-                        <summary class="inline-flex items-center gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-[13px]/[18px] font-medium text-(--poll-meta-strong) hover:text-base-content select-none">
-                          {l("How this is decided")}
-                          <Iconify.iconify
-                            icon="carbon:chevron-down"
-                            class="size-3.5 transition-transform group-open/how:rotate-180 motion-reduce:transition-none"
-                          />
-                        </summary>
-                        <div class="mt-1.5 text-[13px]/[19px] text-(--poll-meta) max-w-prose">
-                          {l(
-                            "Everyone reacts to each option, not just their favourite. An option is agreed when it has broad agreement and no blocks. A single block stops an option until the group resolves the objection."
-                          )}
+                      {#if state == :open and voting_format == "weighted_multiple" and vetoed_ids != []}
+                        <div
+                          class="basis-full mb-2.5 flex items-start gap-2 rounded-(--poll-card-radius) bg-[color-mix(in_oklab,var(--color-warning)_12%,transparent)] px-3.5 py-2.5 text-[13px]/[18px] text-[color-mix(in_oklab,var(--color-warning)_45%,var(--color-base-content))]"
+                          role="status"
+                          data-role="open-block-note"
+                        >
+                          <Iconify.iconify icon="ph:hand-palm-duotone" class="size-4 shrink-0 mt-px text-warning" />
+                          <span class="font-medium">{l("An objection is on the table. This option can't carry until it's resolved.")}</span>
                         </div>
-                      </details>
-                    {/if}
+                      {/if}
 
-                    <input type="hidden" name="question_id" value={id(@object)}>
+                      {!-- Thread-only: the process rules, made legible on demand. --}
+                      {#if @viewing_main_object and voting_format == "weighted_multiple"}
+                        <details class="group/how basis-full mb-2.5" data-role="how-decided" x-on:click.stop>
+                          <summary class="inline-flex items-center gap-1 cursor-pointer list-none [&::-webkit-details-marker]:hidden text-[13px]/[18px] font-medium text-(--poll-meta-strong) hover:text-base-content select-none">
+                            {l("How this is decided")}
+                            <Iconify.iconify
+                              icon="carbon:chevron-down"
+                              class="size-3.5 transition-transform group-open/how:rotate-180 motion-reduce:transition-none"
+                            />
+                          </summary>
+                          <div class="mt-1.5 text-[13px]/[19px] text-(--poll-meta) max-w-prose">
+                            {l(
+                              "Everyone reacts to each option, not just their favourite. An option is agreed when it has broad agreement and no blocks. A single block stops an option until the group resolves the objection."
+                            )}
+                          </div>
+                        </details>
+                      {/if}
 
-                    <div
-                      class={[
-                        "basis-full flex flex-col gap-1.5",
-                        "py-2": @viewing_main_object
-                      ]}
-                      data-role="choices"
-                    >
-                      {#for {choice, idx} <- Enum.with_index(choices)}
-                        {#if results_toggleable}
+                      <input type="hidden" name="question_id" value={id(@object)}>
+
+                      <div
+                        class={[
+                          "basis-full flex flex-col gap-1.5",
+                          "py-2": @viewing_main_object
+                        ]}
+                        data-role="choices"
+                      >
+                        {#for {choice, idx} <- Enum.with_index(choices)}
+                          {#if results_peeking}
+                            {!-- Client-side toggle between the voting and the results rows, replaced by the tallies loaded on "See results" (the voting rows are the default branch below).
                           <div x-show="!showResults">
                             <ChoiceLive
                               question={question_without_choices}
@@ -247,7 +256,32 @@
                               id_prefix={poll_id_prefix}
                             />
                           </div>
-                          <div x-show="showResults" x-cloak>
+                          --}
+                            <div>
+                              <ChoiceLive
+                                question={question_without_choices}
+                                object={choice}
+                                index={idx}
+                                viewing_main_object={@viewing_main_object}
+                                showing_within={@showing_within}
+                                is_remote={@is_remote}
+                                hide_actions={@hide_actions}
+                                voting_format={voting_format}
+                                compact={@viewing_main_object != true}
+                                vote={false}
+                                vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
+                                total_votes={total_votes}
+                                voted_on={false}
+                                user_score={nil}
+                                results_visible
+                                is_winner={false}
+                                is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
+                                score_histogram={Map.get(score_histogram_by_choice_id, id(choice), %{})}
+                                voters_count={voter_count}
+                                id_prefix={poll_id_prefix}
+                              />
+                            </div>
+                          {#else}
                             <ChoiceLive
                               question={question_without_choices}
                               object={choice}
@@ -258,142 +292,118 @@
                               hide_actions={@hide_actions}
                               voting_format={voting_format}
                               compact={@viewing_main_object != true}
-                              vote={false}
+                              vote={not closed and not is_nil(current_user_id(@__context__))}
                               vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
                               total_votes={total_votes}
-                              voted_on={false}
-                              user_score={nil}
-                              results_visible
-                              is_winner={false}
+                              voted_on={Map.has_key?(my_votes, id(choice))}
+                              user_score={Map.get(my_votes, id(choice))}
+                              results_visible={results_visible}
+                              is_winner={closed and total_votes > 0 and id(choice) in winning_ids and
+                                (voting_format != "weighted_multiple" or state == :decided)}
                               is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
-                              score_histogram={Map.get(score_histogram_by_choice_id, id(choice), %{})}
+                              score_histogram={if voting_format == "weighted_multiple",
+                                do: Map.get(score_histogram_by_choice_id, id(choice), %{}),
+                                else: %{}}
                               voters_count={voter_count}
                               id_prefix={poll_id_prefix}
                             />
-                          </div>
-                        {#else}
-                          <ChoiceLive
-                            question={question_without_choices}
-                            object={choice}
-                            index={idx}
-                            viewing_main_object={@viewing_main_object}
-                            showing_within={@showing_within}
-                            is_remote={@is_remote}
-                            hide_actions={@hide_actions}
-                            voting_format={voting_format}
-                            compact={@viewing_main_object != true}
-                            vote={not closed and not is_nil(current_user_id(@__context__))}
-                            vote_count={Map.get(counts_by_choice_id, id(choice), 0)}
-                            total_votes={total_votes}
-                            voted_on={Map.has_key?(my_votes, id(choice))}
-                            user_score={Map.get(my_votes, id(choice))}
-                            results_visible={results_visible}
-                            is_winner={closed and total_votes > 0 and id(choice) in winning_ids and
-                              (voting_format != "weighted_multiple" or state == :decided)}
-                            is_vetoed={voting_format == "weighted_multiple" and id(choice) in vetoed_ids}
-                            score_histogram={if voting_format == "weighted_multiple",
-                              do: Map.get(score_histogram_by_choice_id, id(choice), %{}),
-                              else: %{}}
-                            voters_count={voter_count}
-                            id_prefix={poll_id_prefix}
-                          />
-                        {/if}
-                      {/for}
-                    </div>
+                          {/if}
+                        {/for}
+                      </div>
 
-                    {!-- Thread-only closed caption. A poll that closed with no votes
+                      {!-- Thread-only closed caption. A poll that closed with no votes
                      reads the same for everyone. Beyond that, only tally polls
                      name a winner — group (consent) decisions show NO verdict;
                      the group reads the reaction results itself. --}
-                    {#if @viewing_main_object and closed}
-                      {#case state}
-                        {#match :closed_empty}
-                          <div
-                            class="basis-full flex items-center gap-1.5 pt-2.5 text-[13px]/[18px] text-(--poll-meta)"
-                            data-role="outcome"
-                          >
-                            <Iconify.iconify icon="ph:lock-key" class="size-3.5 shrink-0" />
-                            <span>{l("Closed with no votes.")}</span>
-                          </div>
-                        {#match _}
-                          {#if voting_format != "weighted_multiple"}
-                            {!-- Tally winner: a single slim caption, not a filled panel.
+                      {#if @viewing_main_object and closed}
+                        {#case state}
+                          {#match :closed_empty}
+                            <div
+                              class="basis-full flex items-center gap-1.5 pt-2.5 text-[13px]/[18px] text-(--poll-meta)"
+                              data-role="outcome"
+                            >
+                              <Iconify.iconify icon="ph:lock-key" class="size-3.5 shrink-0" />
+                              <span>{l("Closed with no votes.")}</span>
+                            </div>
+                          {#match _}
+                            {#if voting_format != "weighted_multiple"}
+                              {!-- Tally winner: a single slim caption, not a filled panel.
                          The accented leading bar already carries the win; this
                          just names it and its share. Plural-aware for ties. --}
-                            {#case Enum.join(choice_names(choices, winning_ids), ", ")}
-                              {#match ""}
-                              {#match names}
-                                <div
-                                  class="basis-full flex items-center gap-1.5 pt-2.5 text-[13px]/[18px] text-(--poll-meta)"
-                                  data-role="outcome"
-                                >
-                                  <Iconify.iconify icon="ph:sparkle-duotone" class="size-3.5 shrink-0 text-primary" />
-                                  <span>{if length(winning_ids) > 1, do: l("Tied"), else: l("Top pick")}:</span>
-                                  <span class="font-medium text-base-content truncate">{names}</span>
-                                  {#case winning_percent(voting_format, counts_by_choice_id, winning_ids, total_votes, voter_count)}
-                                    {#match 0}
-                                    {#match pct}
-                                      <span class="ml-auto shrink-0 tabular-nums">{pct}%</span>
-                                  {/case}
-                                </div>
-                            {/case}
-                          {/if}
-                      {/case}
-                    {/if}
-
-                    {!-- Kind, state and headline numbers as one quiet line: a
-                     single-choice poll needs no kind (the radios say it) and an
-                     open one no state (time left says it). --}
-                    {#case process_kind(voting_format)}
-                      {#match kind_label}
-                        <div data-role="poll-meta" class="poll-meta-line">
-                          <span
-                            class="font-medium text-(--poll-meta-strong) group-data-[format=single]/poll:hidden"
-                            data-role="poll-kind"
-                          >{kind_label}</span>
-
-                          <span
-                            class={[
-                              "inline-flex items-center gap-1.5 group-data-[state=open]/poll:hidden",
-                              state_tone_class(state)
-                            ]}
-                            data-role="poll-state-label"
-                          >
-                            <span class="size-1.5 rounded-full bg-current" aria-hidden="true" />
-                            {state_label(state, voting_format)}
-                          </span>
-
-                          <div data-role="poll-meta-stats" class="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {#if state == :open}
-                              {#case time_remaining_label}
-                                {#match nil}
-                                {#match tlabel}
-                                  <span data-role="time-remaining" class="poll-live">{tlabel}</span>
+                              {#case Enum.join(choice_names(choices, winning_ids), ", ")}
+                                {#match ""}
+                                {#match names}
+                                  <div
+                                    class="basis-full flex items-center gap-1.5 pt-2.5 text-[13px]/[18px] text-(--poll-meta)"
+                                    data-role="outcome"
+                                  >
+                                    <Iconify.iconify icon="ph:sparkle-duotone" class="size-3.5 shrink-0 text-primary" />
+                                    <span>{if length(winning_ids) > 1, do: l("Tied"), else: l("Top pick")}:</span>
+                                    <span class="font-medium text-base-content truncate">{names}</span>
+                                    {#case winning_percent(voting_format, counts_by_choice_id, winning_ids, total_votes, voter_count)}
+                                      {#match 0}
+                                      {#match pct}
+                                        <span class="ml-auto shrink-0 tabular-nums">{pct}%</span>
+                                    {/case}
+                                  </div>
                               {/case}
                             {/if}
-                            {#if not locked}
-                              <span data-role="vote-count">{count_label(voting_format, total_votes)}</span>
-                            {/if}
-                            {#if @is_remote}
-                              <span class="inline-flex items-center gap-1">
-                                <Iconify.iconify icon="ph:globe-simple" class="size-3" />
-                                {l("Federated")}
-                              </span>
-                            {/if}
-                          </div>
-                        </div>
-                    {/case}
+                        {/case}
+                      {/if}
 
-                    {#if not closed}
-                      <div
-                        data-role="poll-actions"
-                        class="basis-full sm:basis-auto ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2 py-1.5"
-                      >
-                        {!-- Results first, the primary action last at the row's end, where
+                      {!-- Kind, state and headline numbers as one quiet line: a
+                     single-choice poll needs no kind (the radios say it) and an
+                     open one no state (time left says it). --}
+                      {#case process_kind(voting_format)}
+                        {#match kind_label}
+                          <div data-role="poll-meta" class="poll-meta-line">
+                            <span
+                              class="font-medium text-(--poll-meta-strong) group-data-[format=single]/poll:hidden"
+                              data-role="poll-kind"
+                            >{kind_label}</span>
+
+                            <span
+                              class={[
+                                "inline-flex items-center gap-1.5 group-data-[state=open]/poll:hidden",
+                                state_tone_class(state)
+                              ]}
+                              data-role="poll-state-label"
+                            >
+                              <span class="size-1.5 rounded-full bg-current" aria-hidden="true" />
+                              {state_label(state, voting_format)}
+                            </span>
+
+                            <div data-role="poll-meta-stats" class="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+                              {#if state == :open}
+                                {#case time_remaining_label}
+                                  {#match nil}
+                                  {#match tlabel}
+                                    <span data-role="time-remaining" class="poll-live">{tlabel}</span>
+                                {/case}
+                              {/if}
+                              {#if tallies_loaded and not locked}
+                                <span data-role="vote-count">{count_label(voting_format, total_votes)}</span>
+                              {/if}
+                              {#if @is_remote}
+                                <span class="inline-flex items-center gap-1">
+                                  <Iconify.iconify icon="ph:globe-simple" class="size-3" />
+                                  {l("Federated")}
+                                </span>
+                              {/if}
+                            </div>
+                          </div>
+                      {/case}
+
+                      {#if not closed or
+                          (can_load_results and not @hide_results and not is_nil(current_user_id(@__context__)))}
+                        <div
+                          data-role="poll-actions"
+                          class="basis-full sm:basis-auto ml-auto flex flex-wrap items-center justify-end gap-x-4 gap-y-2 py-1.5"
+                        >
+                          {!-- Results first, the primary action last at the row's end, where
                              the eye lands after picking. Phones give the actions their
                              own row so Vote appearing on the first pick moves nothing. --}
-                        {#if not has_voted}
-                          {#if locked}
+                          {#if locked and not @hide_results}
                             <span
                               class="text-[13px]/[18px] font-medium text-subtle cursor-not-allowed"
                               title={l("Results hidden until poll closes.")}
@@ -401,64 +411,74 @@
                             >
                               {l("See results")}
                             </span>
-                          {#else}
+                          {#elseif can_load_results and not @hide_results and
+                              not is_nil(current_user_id(@__context__))}
+                            {!-- The tallies load on the click (a closed poll's come from the cache) and drop again on the second one. --}
                             <button
                               type="button"
-                              x-on:click="showResults = !showResults"
+                              phx-click={if tallies_loaded, do: "hide_results", else: "show_results"}
+                              phx-target={@myself}
                               class="text-[13px]/[18px] font-medium text-(--poll-meta-strong) hover:text-base-content cursor-pointer"
                               data-role="results-toggle"
                             >
-                              <span x-show="!showResults">{l("See results")}</span>
-                              <span x-show="showResults" x-cloak>{l("Hide results")}</span>
+                              {if tallies_loaded, do: l("Hide results"), else: l("See results")}
                             </button>
                           {/if}
-                        {/if}
 
-                        {#if is_nil(current_user_id(@__context__))}
-                          <a
-                            href={if embed_cta?(@showing_within, @__context__),
-                              do: vote_page_path(@permalink, @object),
-                              else: "/login"}
-                            target={if embed_cta?(@showing_within, @__context__), do: "_blank"}
-                            rel={if embed_cta?(@showing_within, @__context__), do: "noopener"}
-                            class="btn btn-sm btn-ghost border border-divider"
-                            data-role="sign-in-to-vote"
-                          >
-                            {l("Sign in to vote")}
-                          </a>
-                        {#elseif has_voted}
-                          {!-- Pop-in on the first render after submission. --}
-                          <span
-                            x-data="{ s: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0.85, o: 0 }"
-                            x-init="$nextTick(() => { s = 1; o = 1; })"
-                            :style="`transform: scale(${s}); opacity: ${o}`"
-                            class="inline-flex items-center gap-1.5 text-[13px]/[18px] text-primary font-medium motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100"
-                            data-role="voted-indicator"
-                          >
-                            <Iconify.iconify icon="ph:check-circle-fill" class="size-4" />
-                            {l("Voted")}
-                          </span>
-                        {#else}
-                          <button
-                            type="submit"
-                            id={"submit-vote-#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}-#{id(@object)}"}
-                            data-role="submit-vote"
-                            class="btn btn-primary btn-sm disabled:hidden"
-                            x-bind:disabled={if voting_format == "weighted_multiple",
-                              do: "false",
-                              else: "!hasSelection"}
-                          >
-                            {if voting_format == "weighted_multiple",
-                              do: l("Submit votes"),
-                              else: l("Vote")}
-                          </button>
-                        {/if}
-                      </div>
-                    {/if}
-                  </form>
-              {/case}
+                          {#if closed}
+                          {#elseif is_nil(current_user_id(@__context__))}
+                            {!-- A guest votes from their own server, through the remote interaction page. --}
+                            <a
+                              href={if embed_cta?(@showing_within, @__context__),
+                                do: vote_page_path(@permalink, @object),
+                                else:
+                                  Bonfire.UI.Common.remote_interaction_url(
+                                    "vote",
+                                    l("this poll"),
+                                    id(@object),
+                                    @__context__
+                                  ) || "/login"}
+                              target={if embed_cta?(@showing_within, @__context__), do: "_blank"}
+                              rel={if embed_cta?(@showing_within, @__context__), do: "noopener"}
+                              class="btn btn-sm btn-ghost border border-divider"
+                              data-role="sign-in-to-vote"
+                            >
+                              {l("Vote")}
+                            </a>
+                          {#elseif has_voted}
+                            {!-- Pop-in on the first render after submission. --}
+                            <span
+                              x-data="{ s: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 1 : 0.85, o: 0 }"
+                              x-init="$nextTick(() => { s = 1; o = 1; })"
+                              :style="`transform: scale(${s}); opacity: ${o}`"
+                              class="inline-flex items-center gap-1.5 text-[13px]/[18px] text-primary font-medium motion-safe:transition-all motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:!opacity-100"
+                              data-role="voted-indicator"
+                            >
+                              <Iconify.iconify icon="ph:check-circle-fill" class="size-4" />
+                              {l("Voted")}
+                            </span>
+                          {#else}
+                            <button
+                              type="submit"
+                              id={"submit-vote-#{Bonfire.UI.Common.ComponentID.deterministic_id(__MODULE__, @activity_component_id)}-#{id(@object)}"}
+                              data-role="submit-vote"
+                              class="btn btn-primary btn-sm disabled:hidden"
+                              x-bind:disabled={if voting_format == "weighted_multiple",
+                                do: "false",
+                                else: "!hasSelection"}
+                            >
+                              {if voting_format == "weighted_multiple",
+                                do: l("Submit votes"),
+                                else: l("Vote")}
+                            </button>
+                          {/if}
+                        </div>
+                      {/if}
+                    </form>
+                {/case}
+              {/if}
             {/if}
-          {/if}
-        </div>
-    {/case}
-{/case}
+          </div>
+      {/case}
+  {/case}
+</div>

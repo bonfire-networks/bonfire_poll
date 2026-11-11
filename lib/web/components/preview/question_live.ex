@@ -1,5 +1,6 @@
 defmodule Bonfire.Poll.Web.Preview.QuestionLive do
-  use Bonfire.UI.Common.Web, :stateless_component
+  use Bonfire.UI.Common.Web, :stateful_component
+  alias Bonfire.Common.Cache
   alias Bonfire.Poll.Questions
   alias Bonfire.Poll.Votes
   alias Bonfire.Poll.Web.Preview.ChoiceLive
@@ -12,10 +13,17 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   prop cw, :boolean, default: nil
   prop is_remote, :boolean, default: false
   prop vote_state, :any, default: nil
+
+  # no tallies and no "See results" (eg. in the dashboard widget); pass an empty `vote_state` too so nothing is queried
+  prop hide_results, :boolean, default: false
   prop thread_title, :any, default: nil
   prop hide_actions, :boolean, default: false
   prop activity_inception, :boolean, default: false
   prop permalink, :string, default: nil
+
+  # what `update_many/1` and the "See results" events keep for the poll shown: the viewer's own votes and, once loaded, the tallies
+  data qstate, :any, default: nil
+  data qstate_for, :any, default: nil
 
   defp vote_page_path(permalink, question) do
     usable_path(permalink) || maybe_path(question) || "/login"
@@ -60,13 +68,24 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   end
 
   @doc "Pre-compute every value the template branches read, so the .sface stays flat."
-  def view_state(question, is_remote \\ false, current_user \\ nil, vote_state \\ nil) do
+  def view_state(
+        question,
+        is_remote \\ false,
+        current_user \\ nil,
+        vote_state \\ nil,
+        hide_results \\ false
+      ) do
     choices = e(question, :choices, []) || []
-    remote_stats = if is_remote, do: remote_poll_stats(question), else: empty_remote_stats()
-    end_time = end_time(question, remote_stats)
     voting_format = e(question, :voting_format, nil) || Questions.default_voting_format()
 
     vote_state = preview_vote_state(question, is_remote, current_user, vote_state)
+    tallies_loaded = Map.get(vote_state, :tallies_loaded, true)
+
+    # a remote poll's counts come from its cached ActivityPub object, read only once the tallies are loaded
+    remote_stats =
+      if is_remote and tallies_loaded, do: remote_poll_stats(question), else: empty_remote_stats()
+
+    end_time = end_time(question, remote_stats)
     local_counts = e(vote_state, :counts_by_choice_id, %{})
     local_histograms = e(vote_state, :score_histogram_by_choice_id, %{})
 
@@ -94,15 +113,23 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
     policy = Questions.results_visibility_policy()
 
     # Whether the viewer is *allowed* to see the tally (owner, or per policy).
+    # (`update_many/1` works it out for closed polls and passes it in the state, so the edit-permission check inside runs once per render)
     may_see_results =
-      Questions.results_visible?(question,
-        current_user: current_user,
-        viewer_voted?: voted?,
-        ended?: closed,
-        policy: policy
-      )
+      case vote_state do
+        %{may_see_results: known} ->
+          known
 
-    results_visible = may_see_results and (closed or voted?)
+        _ ->
+          Questions.results_visible?(question,
+            current_user: current_user,
+            viewer_voted?: voted?,
+            ended?: closed,
+            policy: policy
+          )
+      end
+
+    # Whether the viewer may see the results now (not whether they are loaded yet).
+    results_allowed = not hide_results and may_see_results and (closed or voted?)
 
     # Hidden-until-close (per-poll `hide_results`) disables the pre-vote peek.
     hidden_until_close = results_locked?(question, end_time)
@@ -110,8 +137,12 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
     # A not-yet-voted viewer on an open poll may peek at results early, unless
     # the policy defers them to close (`:after_close`) or the poll hides them.
     results_toggleable =
-      not closed and not voted? and not results_visible and
+      not hide_results and not closed and not voted? and not results_allowed and
         policy in [:after_vote, :always] and not hidden_until_close
+
+    # Counts show only once the tallies are loaded ("See results", a vote just cast, or a cached closed poll for a guest).
+    results_visible = results_allowed and tallies_loaded
+    results_peeking = results_toggleable and tallies_loaded
 
     %{
       choices: choices,
@@ -122,9 +153,12 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
       score_histogram_by_choice_id: local_histograms,
       end_time: end_time,
       closed: closed,
-      locked: not closed and not voted? and not results_visible and not results_toggleable,
+      locked: not closed and not voted? and not results_allowed and not results_toggleable,
       results_visible: results_visible,
       results_toggleable: results_toggleable,
+      results_peeking: results_peeking,
+      can_load_results: results_allowed or results_toggleable,
+      tallies_loaded: tallies_loaded,
       winning_ids:
         winning_ids(voting_format, choices, counts_by_choice_id, local_histograms, weighting),
       voting_format: voting_format,
@@ -137,8 +171,11 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
     }
   end
 
-  defp preview_vote_state(_question, true, _current_user, _vote_state),
-    do: Votes.empty_preview_vote_state()
+  # A remote poll has no local tallies or own votes: its counts come from the cached object, once loaded.
+  defp preview_vote_state(_question, true, _current_user, vote_state) do
+    loaded = if is_map(vote_state), do: Map.get(vote_state, :tallies_loaded, true), else: false
+    Map.put(Votes.empty_preview_vote_state(), :tallies_loaded, loaded)
+  end
 
   defp preview_vote_state(question, _is_remote, _current_user, vote_state)
        when is_map(vote_state) do
@@ -149,8 +186,284 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
     end
   end
 
-  defp preview_vote_state(question, _is_remote, current_user, _vote_state),
-    do: Votes.preview_vote_state_for_question(question, current_user)
+  # Nothing passed in and nothing loaded by `update_many/1`: no own votes, no tallies, and no query.
+  defp preview_vote_state(_question, _is_remote, _current_user, _vote_state),
+    do: unloaded_vote_state()
+
+  @doc "The state of a poll whose tallies are not loaded: no counts, and no own votes unless given."
+  def unloaded_vote_state(my_vote_weights \\ %{}),
+    do:
+      Votes.empty_preview_vote_state()
+      |> Map.put(:my_vote_weights, my_vote_weights)
+      |> Map.put(:tallies_loaded, false)
+
+  # A closed poll's tallies are cached with no expiry (`expire: nil`): they can't change once voting ended.
+  # @closed_tallies_ttl to_timeout(day: 30)
+
+  defp tallies_cache_key(question_id), do: "bonfire_poll:closed_tallies:#{question_id}"
+
+  @doc "True when the viewer may load this poll's tallies now: the results policy allows them, or they may peek on an open poll. The server-side check behind \"See results\"."
+  def may_load_results?(question, current_user, my_vote_weights \\ %{}) do
+    state = view_state(question, false, current_user, unloaded_vote_state(my_vote_weights))
+    state.can_load_results
+  end
+
+  @doc """
+  The state with this poll's tallies loaded, when the viewer may see them (`may_load_results?/3`), else unchanged. A closed poll's tallies come from the cache, loaded once and kept (they can't change); an open poll's are read fresh. A remote poll has none of its own: its counts are read from the cached object when rendering.
+  """
+  def load_tallies(question, current_user, %{} = state, is_remote \\ false) do
+    cond do
+      Map.get(state, :tallies_loaded) == true ->
+        state
+
+      is_remote ->
+        Map.put(state, :tallies_loaded, true)
+
+      may_load_results?(question, current_user, Map.get(state, :my_vote_weights, %{})) ->
+        tallies =
+          if closed?(end_time(question)) do
+            Map.get(state, :cached_tallies) || closed_tallies([question]) |> Map.get(id(question))
+          else
+            Votes.tallies_for_questions([question]) |> Map.get(id(question))
+          end
+
+        state
+        |> Map.delete(:cached_tallies)
+        |> Map.merge(tallies)
+        |> Map.put(:tallies_loaded, true)
+
+      true ->
+        state
+    end
+  end
+
+  # The preview's own events (`phx-target` is the component): "See results" loads this poll's tallies if the viewer may see them (`load_tallies/4` checks); voting and suggesting an option are the form submissions.
+  def handle_event("show_results", _params, %{assigns: %{qstate: %{} = state}} = socket) do
+    {:noreply,
+     Phoenix.Component.assign(
+       socket,
+       :qstate,
+       load_tallies(
+         socket.assigns.object,
+         current_user(socket),
+         state,
+         socket.assigns[:is_remote] == true
+       )
+     )}
+  end
+
+  def handle_event("hide_results", _params, %{assigns: %{qstate: %{} = state}} = socket) do
+    {:noreply, Phoenix.Component.assign(socket, :qstate, unload_tallies(state))}
+  end
+
+  def handle_event("submit_vote", %{"question_id" => question} = params, socket) do
+    voter = current_user(socket)
+
+    # Guard explicitly: `Votes.vote(nil, …)` would otherwise return the
+    # misleading "Voting is not open" rather than prompting a sign-in.
+    case voter && Votes.vote(voter, question, Bonfire.Poll.LiveHandler.parse_votes(params)) do
+      nil ->
+        {:noreply, assign_error(socket, l("You need to sign in to vote."))}
+
+      {:ok, _result} ->
+        # re-read the voter's own votes, and show the tallies at once where the results policy lets a voter see them (`load_tallies/4` checks)
+        state =
+          unloaded_vote_state(
+            Votes.my_votes_for_questions(voter, [socket.assigns.object])
+            |> Map.get(id(socket.assigns.object), %{})
+          )
+
+        {:noreply,
+         socket
+         |> Phoenix.Component.assign(
+           :qstate,
+           load_tallies(
+             socket.assigns.object,
+             voter,
+             state,
+             socket.assigns[:is_remote] == true
+           )
+         )
+         |> assign_flash(:info, l("Thanks for participating!"))}
+
+      {:error, msg} when is_binary(msg) ->
+        {:noreply, assign_error(socket, msg)}
+
+      other ->
+        # Defensive: log + swallow unexpected return shapes from Votes.vote/4.
+        error(other, "submit_vote: unexpected vote result")
+        {:noreply, assign_error(socket, l("Sorry, you can't vote on this poll."))}
+    end
+  end
+
+  def handle_event(
+        "submit_proposal",
+        %{"question_id" => question_id, "proposal" => %{"name" => name}},
+        socket
+      ) do
+    case Bonfire.Poll.Choices.add_proposal(
+           question_id,
+           %{name: name},
+           current_user: current_user(socket)
+         ) do
+      {:ok, _choice} ->
+        # `push_navigate` to the same URL forces the LV to re-fetch the
+        # question and pick up the newly-inserted choice.
+        socket =
+          case path_for_question(question_id, current_user: current_user(socket)) do
+            nil -> socket
+            path -> Phoenix.LiveView.push_navigate(socket, to: path)
+          end
+
+        {:noreply, assign_flash(socket, :info, l("Proposal added."))}
+
+      {:error, :proposal_phase_closed} ->
+        {:noreply, assign_error(socket, l("The proposal phase is not currently open."))}
+
+      {:error, :not_authorized} ->
+        {:noreply,
+         assign_error(socket, l("You don't have permission to suggest options for this poll."))}
+
+      {:error, :name_required} ->
+        {:noreply, assign_error(socket, l("Please enter the option text."))}
+
+      {:error, :unauthorized} ->
+        {:noreply, assign_error(socket, l("You need to sign in first."))}
+
+      {:error, :not_found} ->
+        {:noreply, assign_error(socket, l("Poll not found."))}
+
+      other ->
+        error(other, "submit_proposal failed")
+        {:noreply, assign_error(socket, l("Could not add proposal."))}
+    end
+  end
+
+  defp path_for_question(id, opts) when is_binary(id) do
+    case Questions.read(id, opts) do
+      {:ok, q} -> path(q)
+      _ -> nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp path_for_question(_, _), do: nil
+
+  @doc "The state with the tallies dropped again (\"Hide results\")."
+  def unload_tallies(%{} = state),
+    do:
+      unloaded_vote_state(Map.get(state, :my_vote_weights, %{}))
+      |> Map.merge(Map.take(state, [:may_see_results]))
+
+  # The tallies of closed polls, keyed by question id: read from the cache, the misses loaded in one query and cached.
+  defp closed_tallies(questions) do
+    cached = read_cached_tallies(questions)
+
+    missing = Enum.reject(questions, &Map.has_key?(cached, id(&1)))
+
+    loaded =
+      if missing == [] do
+        %{}
+      else
+        missing
+        |> Votes.tallies_for_questions()
+        |> tap(fn tallies ->
+          Enum.each(tallies, fn {question_id, value} ->
+            Cache.put(tallies_cache_key(question_id), value,
+              expire: nil,
+              async: false
+            )
+          end)
+        end)
+      end
+
+    Map.merge(cached, loaded)
+  end
+
+  # one batched cache read for all the polls
+  defp read_cached_tallies(questions) do
+    cached = questions |> Enum.map(&tallies_cache_key(id(&1))) |> Cache.get_many()
+
+    for question <- questions,
+        value = Map.get(cached, tallies_cache_key(id(question))),
+        is_map(value),
+        into: %{},
+        do: {id(question), value}
+  end
+
+  @doc """
+  Loads what the previews on a page need, for all of them at once: the signed-in viewer's own votes in one query (none for a guest), and the tallies of closed polls from the cache (for a guest the misses are loaded in one query and cached, and shown; a signed-in viewer's stay unshown until "See results"). A poll given a `vote_state` is left to the caller, as is one already loaded.
+  """
+  def update_many(assigns_sockets) do
+    # `{what the poll was given, with the declared prop defaults and what it kept, socket}`
+    entries =
+      Enum.map(assigns_sockets, fn {assigns, socket} ->
+        given =
+          Bonfire.UI.Common.Web.apply_surface_prop_defaults(__MODULE__, assigns, socket)
+          |> Map.drop([:__changed__, :flash])
+
+        {given, Map.merge(socket.assigns, given), socket}
+      end)
+
+    # the polls whose state this module loads: not given a `vote_state`, not remote (its counts come from the cached object), not loaded already
+    local =
+      for {_given, assigns, socket} <- entries,
+          is_nil(assigns[:vote_state]),
+          assigns[:is_remote] != true,
+          assigns[:object],
+          socket.assigns[:qstate_for] != id(assigns[:object]),
+          do: assigns[:object]
+
+    current_user =
+      case entries do
+        [{_given, assigns, _} | _] -> current_user(assigns[:__context__])
+        _ -> nil
+      end
+
+    my_votes = Votes.my_votes_for_questions(current_user, local)
+
+    closed =
+      Enum.filter(local, fn question ->
+        closed?(end_time(question)) and
+          may_load_results?(question, current_user, Map.get(my_votes, id(question), %{}))
+      end)
+
+    closed_tallies = if closed == [], do: %{}, else: closed_tallies_for(closed, current_user)
+    closed_ids = MapSet.new(closed, &id/1)
+
+    Enum.map(entries, fn {given, assigns, socket} ->
+      object = assigns[:object]
+      socket = Phoenix.Component.assign(socket, given)
+
+      if (is_nil(assigns[:vote_state]) and object) && socket.assigns[:qstate_for] != id(object) do
+        qstate =
+          unloaded_vote_state(Map.get(my_votes, id(object), %{}))
+          |> put_closed_tallies(Map.get(closed_tallies, id(object)), current_user)
+          |> put_may_see_results(MapSet.member?(closed_ids, id(object)))
+
+        Phoenix.Component.assign(socket, qstate: qstate, qstate_for: id(object))
+      else
+        socket
+      end
+    end)
+  end
+
+  # a guest sees a closed poll's results straight away; a signed-in viewer's wait for the click
+  defp closed_tallies_for(closed, nil), do: closed_tallies(closed)
+  defp closed_tallies_for(closed, _current_user), do: read_cached_tallies(closed)
+
+  # `closed` only holds polls the viewer may see the results of (checked once in `update_many/1`), so the render need not check again
+  defp put_may_see_results(state, true), do: Map.put(state, :may_see_results, true)
+  defp put_may_see_results(state, _), do: state
+
+  defp put_closed_tallies(state, nil, _current_user), do: state
+
+  defp put_closed_tallies(state, tallies, nil),
+    do: state |> Map.merge(tallies) |> Map.put(:tallies_loaded, true)
+
+  defp put_closed_tallies(state, tallies, _current_user),
+    do: Map.put(state, :cached_tallies, tallies)
 
   defp choice_ids(%MapSet{} = ids), do: MapSet.to_list(ids)
   defp choice_ids(ids) when is_list(ids), do: ids
