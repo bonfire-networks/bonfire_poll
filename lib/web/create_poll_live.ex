@@ -45,6 +45,7 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   prop textarea_container_class, :css_class
   prop textarea_container_class_alpine, :string
   prop textarea_class, :css_class
+  prop composer_policy, :map, default: nil
 
   @behaviour Bonfire.UI.Common.SmartInputModule
   def smart_input_module, do: [:poll, Bonfire.Poll.Question]
