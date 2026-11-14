@@ -42,7 +42,7 @@
                 <div
                   :if={name != @thread_title}
                   class={[
-                    "w-full h-auto max-w-full p-0 m-0 my-1 font-medium",
+                    "w-full h-auto max-w-full p-0 px-4 m-0 my-1 font-medium",
                     "text-base": @viewing_main_object != true,
                     "text-xl": @viewing_main_object == true
                   ]}
