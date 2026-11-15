@@ -247,6 +247,16 @@ defmodule Bonfire.Poll.Questions do
     |> order_by([main_object: q], asc: fragment("?[2]", q.voting_dates))
     |> limit(^limit)
     |> boundarise(main_object.id, opts)
+    |> then(fn query ->
+      # for the widget, which follows the instance's choice of local only or everywhere
+      if opts[:widget_origin],
+        do:
+          Bonfire.Social.Feeds.maybe_widget_local_only(query, [
+            {:main_object, :id},
+            {:created, :creator_id}
+          ]),
+        else: query
+    end)
     |> repo().all()
     # Preload the choices so the full poll preview can render its options.
     # Vote counts are still fetched as a separate aggregate (see moduledoc),
@@ -304,7 +314,7 @@ defmodule Bonfire.Poll.Questions do
   end
 
   defp do_closing_soon(limit, as_circle_opts) do
-    polls = list_closing_soon(as_circle_opts, limit)
+    polls = list_closing_soon(as_circle_opts ++ [widget_origin: true], limit)
     # Only the poll list is cached; the widget shows no counts or own votes.
     %{polls: polls}
   end
@@ -315,7 +325,8 @@ defmodule Bonfire.Poll.Questions do
     closing_soon_circle_key(circle, limit)
   end
 
-  defp closing_soon_circle_key(circle, limit), do: "widget_polls_closing_soon:#{circle}:#{limit}"
+  defp closing_soon_circle_key(circle, limit),
+    do: "widget_polls_closing_soon:#{circle}:#{limit}:#{Bonfire.Social.Feeds.widget_origin_key()}"
 
   defp mostly_ended?([]), do: false
 
