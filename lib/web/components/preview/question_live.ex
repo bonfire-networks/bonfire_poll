@@ -301,16 +301,18 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
         %{"question_id" => question_id, "proposal" => %{"name" => name}},
         socket
       ) do
+    current_user = current_user(socket)
+
     case Bonfire.Poll.Choices.add_proposal(
            question_id,
            %{name: name},
-           current_user: current_user(socket)
+           current_user: current_user
          ) do
       {:ok, _choice} ->
         # `push_navigate` to the same URL forces the LV to re-fetch the
         # question and pick up the newly-inserted choice.
         socket =
-          case path_for_question(question_id, current_user: current_user(socket)) do
+          case path_for_question(question_id, current_user: current_user) do
             nil -> socket
             path -> Phoenix.LiveView.push_navigate(socket, to: path)
           end

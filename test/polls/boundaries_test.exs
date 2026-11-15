@@ -167,7 +167,10 @@ defmodule Bonfire.Poll.BoundariesTest do
       {:ok, voters_circle} =
         Bonfire.Boundaries.Circles.create(author, %{named: %{name: "voters"}})
 
-      {:ok, _} = Bonfire.Boundaries.Circles.add_to_circles(insider, voters_circle)
+      {:ok, _} =
+        Bonfire.Boundaries.Circles.add_to_circles(insider, voters_circle,
+          skip_boundary_check: true
+        )
 
       {:ok, poll} =
         fake_question_with_choices(
