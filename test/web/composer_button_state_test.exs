@@ -23,13 +23,15 @@ defmodule Bonfire.Poll.Web.ComposerButtonStateTest do
     assert persistent, "sticky PersistentLive child not found"
 
     persistent
-    |> element("#composer_type_tray_rail button[phx-click*='CreatePollLive']")
+    |> element("#composer_type_menu_panel button[phx-click*='CreatePollLive']")
     |> render_click()
 
     # the type switch routes through PersistentLive's `set` messaging (a
     # send-to-self here); render/1 is a sync call so it's processed by now
     html = render(persistent)
     assert html =~ "smart_input_poll_content"
+    # the round button now shows the poll
+    assert has_element?(persistent, "#composer_type_menu_trigger[aria-label*='Poll']")
     persistent
   end
 
