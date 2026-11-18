@@ -2,6 +2,7 @@ defmodule Bonfire.Poll.VotesTest do
   use Bonfire.Poll.DataCase, async: true
   import Bonfire.Me.Fake
   import Bonfire.Poll.Fake
+  import Bonfire.Common.Testing, only: [count_queries: 1]
   alias Bonfire.Poll.Votes
 
   describe "voting logic" do
@@ -504,51 +505,29 @@ defmodule Bonfire.Poll.VotesTest do
 
     test "one poll + logged-in viewer = exactly 3 queries (histogram, voter-count, viewer-votes)",
          %{first: q, viewer: viewer} do
-      assert count_queries(fn -> Votes.preview_vote_state_for_question(q, viewer) end) == 3
+      assert {_, 3} = count_queries(fn -> Votes.preview_vote_state_for_question(q, viewer) end)
     end
 
     test "one poll + no viewer = 2 queries (the per-viewer query is skipped)", %{first: q} do
-      assert count_queries(fn -> Votes.preview_vote_state_for_question(q, nil) end) == 2
+      assert {_, 2} = count_queries(fn -> Votes.preview_vote_state_for_question(q, nil) end)
     end
 
     test "the batch API is constant: all N polls in one call = 3 queries",
          %{questions: questions, viewer: viewer} do
-      assert count_queries(fn -> Votes.preview_vote_state_for_questions(questions, viewer) end) ==
-               3
+      assert {_, 3} =
+               count_queries(fn -> Votes.preview_vote_state_for_questions(questions, viewer) end)
     end
 
     test "per-poll loading (what the stateless component does today) is linear: N polls = 3*N queries",
          %{questions: questions, viewer: viewer} do
       n = length(questions)
 
-      assert count_queries(fn ->
-               Enum.each(questions, &Votes.preview_vote_state_for_question(&1, viewer))
-             end) == 3 * n
+      expected = 3 * n
+
+      assert {_, ^expected} =
+               count_queries(fn ->
+                 Enum.each(questions, &Votes.preview_vote_state_for_question(&1, viewer))
+               end)
     end
-  end
-
-  # Count DB queries issued while running `fun` once. Ecto derives the telemetry
-  # prefix from the repo module: Bonfire.Common.Repo -> [:bonfire, :common, :repo].
-  defp count_queries(fun) do
-    counter = :counters.new(1, [])
-    handler_id = {__MODULE__, :query_count, make_ref()}
-    test_pid = self()
-
-    :telemetry.attach(
-      handler_id,
-      [:bonfire, :common, :repo, :query],
-      fn _event, _measurements, _meta, _config ->
-        if self() == test_pid, do: :counters.add(counter, 1, 1)
-      end,
-      nil
-    )
-
-    try do
-      fun.()
-    after
-      :telemetry.detach(handler_id)
-    end
-
-    :counters.get(counter, 1)
   end
 end
