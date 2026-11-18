@@ -95,6 +95,47 @@ defmodule Bonfire.Poll.Web.ComposerButtonStateTest do
     assert submit_enabled?(persistent)
   end
 
+  # as a type form built with Surface's `<Form change=…>` (eg. a task or an offer) sends it in the
+  # browser: to its own component, not to the composer that owns the draft
+  test "validate run on the type component itself still enables the Post button", %{conn: conn} do
+    persistent = open_poll_composer(conn)
+    refute submit_enabled?(persistent)
+
+    persistent
+    |> with_target("#smart_input_poll_content")
+    |> render_change("Bonfire.UI.Common.SmartInput:validate", %{
+      "_target" => ["post", "post_content", "html_body"],
+      "post" => %{"post_content" => %{"html_body" => "What shall we do?"}}
+    })
+
+    assert submit_enabled?(persistent)
+  end
+
+  test "a non-content change validated on the type component keeps the composer's status, not its own old one",
+       %{conn: conn} do
+    persistent = open_poll_composer(conn)
+    on_type_component = with_target(persistent, "#smart_input_poll_content")
+
+    render_change(on_type_component, "Bonfire.UI.Common.SmartInput:validate", %{
+      "_target" => ["post", "post_content", "html_body"],
+      "post" => %{"post_content" => %{"html_body" => "What shall we do?"}}
+    })
+
+    assert submit_enabled?(persistent)
+
+    # the composer's status is cleared without the type component hearing of it (as a discard does
+    # where the type stays mounted, eg. an inline composer with a fixed type)
+    type_question(persistent, "")
+    refute submit_enabled?(persistent)
+
+    render_change(on_type_component, "Bonfire.UI.Common.SmartInput:validate", %{
+      "_target" => ["duration_hours"],
+      "post" => %{"post_content" => %{"html_body" => ""}}
+    })
+
+    refute submit_enabled?(persistent)
+  end
+
   test "clearing the question (with empty options) disables the button again", %{conn: conn} do
     persistent = open_poll_composer(conn)
     type_question(persistent, "What shall we do?")
