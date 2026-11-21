@@ -25,22 +25,15 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
 
       field :choices, list_of(:choice) do
         # Load choices here because only the poll resolver has both poll and choice context.
-        resolve(fn poll, _, info ->
-          user = GraphQL.current_user(info)
-          vote_state = Votes.preview_vote_state_for_question(poll, user)
-
-          visible =
-            Votes.results_visible?(nil, poll,
-              current_user: user,
-              viewer_voted?: map_size(vote_state.my_vote_weights) > 0
-            )
-
-          choices =
-            poll_choices(poll)
-            |> enrich_choice_results(poll, vote_state, visible)
-
-          {:ok, choices}
-        end)
+        resolve(
+          with_vote_state(
+            fn poll, state, choices, user ->
+              {:ok,
+               enrich_choice_results(choices, poll, state, results_visible?(poll, state, user))}
+            end,
+            choices: true
+          )
+        )
       end
 
       field(:activity, :activity)
@@ -49,6 +42,9 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       field :creator, :any_character do
         resolve(&Bonfire.Social.API.GraphQL.resolve_creator/3)
       end
+
+      # what the viewer did to this object (`:object_interactions`)
+      import_fields(:object_interactions)
 
       field :proposals_open_at, :datetime do
         resolve(fn poll, _, _ ->
@@ -75,50 +71,41 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
 
       field :votes_count, :integer do
-        resolve(fn poll, _, _ ->
-          # Use the per-question read model so counts stay scoped to this poll.
-          {:ok, Votes.counts_for_questions([poll.id]) |> Map.get(poll.id, 0)}
-        end)
+        # every vote on THIS poll: `counts_for_questions/1` counted the same join, which the histogram groups by choice and weight
+        resolve(
+          with_vote_state(fn _poll, state, _, _ ->
+            {:ok,
+             state.score_histogram_by_choice_id
+             |> Enum.flat_map(fn {_choice_id, histogram} -> Map.values(histogram) end)
+             |> Enum.sum()}
+          end)
+        )
       end
 
       field :voters_count, :integer do
-        resolve(fn poll, _, _ ->
-          # Distinct voters for THIS poll (read model), not globally.
-          {:ok, Votes.preview_vote_state_for_question(poll).voter_count}
-        end)
+        # Distinct voters for THIS poll (read model), not globally.
+        resolve(with_vote_state(fn _poll, state, _, _ -> {:ok, state.voter_count} end))
       end
 
       field :voted, :boolean do
         # Unauthenticated requests have no current_user and should resolve false.
-        resolve(fn poll, _, info ->
-          user = GraphQL.current_user(info)
-          {:ok, MapSet.member?(Votes.voted_question_ids(user, [poll.id]), poll.id)}
-        end)
+        resolve(
+          with_vote_state(fn _poll, state, _, _ -> {:ok, map_size(state.my_vote_weights) > 0} end)
+        )
       end
 
       field :own_votes, list_of(:choice) do
-        resolve(fn poll, _, info ->
-          user = GraphQL.current_user(info)
-          vote_state = Votes.preview_vote_state_for_question(poll, user)
-
-          voted_ids =
-            vote_state.my_vote_weights
-            |> Map.keys()
-            |> MapSet.new()
-
-          visible =
-            Votes.results_visible?(nil, poll,
-              current_user: user,
-              viewer_voted?: map_size(vote_state.my_vote_weights) > 0
-            )
-
-          choices =
-            poll_choices(poll)
-            |> Enum.filter(&MapSet.member?(voted_ids, &1.id))
-            |> enrich_choice_results(poll, vote_state, visible)
-
-          {:ok, choices}
-        end)
+        resolve(
+          with_vote_state(
+            fn poll, state, choices, user ->
+              {:ok,
+               choices
+               |> Enum.filter(&Map.has_key?(state.my_vote_weights, &1.id))
+               |> enrich_choice_results(poll, state, results_visible?(poll, state, user))}
+            end,
+            choices: true
+          )
+        )
       end
 
       field :voting_format, :string
@@ -206,10 +193,40 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled and
       end
     end
 
-    # Choices may be unpreloaded depending on the feed path.
-    defp poll_choices(poll) do
-      Bonfire.Common.Repo.maybe_preload(poll, choices: [:post_content])
-      |> e(:choices, [])
+    # the viewer's vote state, and the choices when asked, batched per request (`:poll_vote_state`, `VoteStateDataloader`); preloaded choices are used as they are
+    defp with_vote_state(fun, opts \\ []) do
+      fn poll, _args, %{context: %{loader: loader}} = info ->
+        user = GraphQL.current_user(info)
+        key = %{question_id: poll.id, user_id: Types.uid(user)}
+        choices = if opts[:choices], do: preloaded_choices(poll), else: []
+
+        loader
+        |> Dataloader.load(:poll_vote_state, :vote_state, key)
+        |> maybe_load_choices(choices, poll.id)
+        |> Helpers.on_load(fn loader ->
+          state =
+            Dataloader.get(loader, :poll_vote_state, :vote_state, key) ||
+              Votes.empty_preview_vote_state()
+
+          choices = choices || Dataloader.get(loader, :poll_vote_state, :choices, poll.id) || []
+          fun.(poll, state, choices, user)
+        end)
+      end
+    end
+
+    defp maybe_load_choices(loader, nil, poll_id),
+      do: Dataloader.load(loader, :poll_vote_state, :choices, poll_id)
+
+    defp maybe_load_choices(loader, _choices, _poll_id), do: loader
+
+    defp preloaded_choices(%{choices: choices}) when is_list(choices), do: choices
+    defp preloaded_choices(_), do: nil
+
+    defp results_visible?(poll, state, user) do
+      Votes.results_visible?(nil, poll,
+        current_user: user,
+        viewer_voted?: map_size(state.my_vote_weights) > 0
+      )
     end
 
     defp enrich_choice_results(choices, poll, vote_state, true) do

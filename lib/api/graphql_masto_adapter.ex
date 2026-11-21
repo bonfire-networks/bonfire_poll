@@ -7,17 +7,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
     alias Bonfire.API.MastoCompat.{Fragments, Mappers}
     import Bonfire.API.MastoCompat.Helpers, only: [get_field: 2]
 
-    @poll_fields """
-    id
-    __typename
-    voting_format: votingFormat
-    voting_close_at: votingCloseAt
-    votes_count: votesCount
-    voters_count: votersCount
-    voted
-    own_votes: ownVotes { id }
-    choices { id post_content: postContent { name html_body: htmlBody summary } votes_result_total: votesResultTotal }
-    """
+    @poll_fields Fragments.poll_fields()
     @poll_query "query($id: ID!) { poll(filter: {id: $id}) { #{@poll_fields} } }"
     @create_query """
     mutation($content: PostContentInput!, $choices: [PostContentInput], $format: String, $seconds: Int,
