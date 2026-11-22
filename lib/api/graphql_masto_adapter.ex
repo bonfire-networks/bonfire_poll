@@ -17,7 +17,7 @@ if Application.compile_env(:bonfire_api_graphql, :modularity) != :disabled do
         contextId: $context, replyTo: $reply) {
         #{@poll_fields}
         post_content: postContent { name html_body: htmlBody summary }
-        activity { id subject { #{Fragments.actor_fields()} } #{Fragments.thread_fields()} }
+        activity { id subject { #{Fragments.author_fields()} } #{Fragments.thread_fields()} }
       }
     }
     """
