@@ -13,6 +13,12 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
   """
   use Bonfire.UI.Common.Web, :stateless_component
 
+  declare_widget(l("Polls closing soon"),
+    id: :polls_closing_soon,
+    current_user_required: true,
+    props: [limit: 3, widget_title: l("Polls closing soon")]
+  )
+
   alias Bonfire.Poll.Questions
   alias Bonfire.Poll.Votes
   alias Bonfire.Poll.Web.Preview.QuestionLive
