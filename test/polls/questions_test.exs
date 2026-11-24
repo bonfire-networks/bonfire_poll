@@ -32,6 +32,35 @@ defmodule Bonfire.Poll.QuestionsTest do
     end
   end
 
+  describe "as a reply" do
+    test "a poll made with reply_to_id, flat or nested as the composer sends it, is a reply in the thread" do
+      user = fake_user!()
+
+      {:ok, post} =
+        Bonfire.Posts.publish(
+          current_user: user,
+          post_attrs: %{post_content: %{html_body: "a post to reply to"}},
+          boundary: "public"
+        )
+
+      {:ok, flat} = fake_question(%{reply_to_id: post.id}, current_user: user)
+
+      {:ok, nested} =
+        fake_question(%{reply_to: %{reply_to_id: post.id}}, current_user: user)
+
+      for question <- [flat, nested] do
+        replied = Bonfire.Common.Repo.get(Bonfire.Data.Social.Replied, question.id)
+        assert replied.reply_to_id == post.id
+        assert replied.thread_id == post.id
+      end
+
+      assert %{edges: replies} = Bonfire.Social.Threads.list_replies(post.id, user)
+      reply_ids = Enum.map(replies, & &1.id)
+      assert flat.id in reply_ids
+      assert nested.id in reply_ids
+    end
+  end
+
   test "voting_open?/1 and voting_ended?/1" do
     now = DateTime.utc_now()
     past = DateTime.add(now, -3600, :second)

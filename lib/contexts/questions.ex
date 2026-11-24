@@ -487,6 +487,8 @@ defmodule Bonfire.Poll.Questions do
         is_public
       )
 
+    {context, reply_to} = Bonfire.Social.Threads.ap_prepare_context_and_reply_to(question)
+
     # Use PostContents.ap_prepare_object_note for main content
     main_obj =
       Bonfire.Social.PostContents.ap_prepare_object_note(
@@ -495,10 +497,8 @@ defmodule Bonfire.Poll.Questions do
         question,
         actor,
         mentions,
-        # TODO: context
-        nil,
-        # TODO: reply_to
-        nil
+        context,
+        reply_to
       )
       |> Bonfire.Files.ap_merge_media(e(question, :media, nil))
 
@@ -559,7 +559,9 @@ defmodule Bonfire.Poll.Questions do
         _object,
         extra_opts
       ) do
-    attrs = ap_question_attrs(question_data)
+    attrs =
+      ap_question_attrs(question_data)
+      |> put_ap_reply_to(question_data, question_data)
 
     # a bare `Question` with no `Create` wrapper: the activity IS the object here
     opts =
@@ -583,14 +585,17 @@ defmodule Bonfire.Poll.Questions do
       when is_in(type, ["Create", "Update"]) do
     attrs = ap_question_attrs(question_data)
 
-    opts =
-      ap_receive_opts(creator, activity, question_data, attrs, extra_opts)
-
     case type do
       "Create" ->
-        create(opts)
+        attrs = put_ap_reply_to(attrs, activity_data, question_data)
+
+        creator
+        |> ap_receive_opts(activity, question_data, attrs, extra_opts)
+        |> create()
 
       "Update" ->
+        opts = ap_receive_opts(creator, activity, question_data, attrs, extra_opts)
+
         with {:ok, question} <-
                get_by_uri(ap_id, current_user: creator),
              # TODO: also update circles/boundaries if changed?
@@ -663,6 +668,14 @@ defmodule Bonfire.Poll.Questions do
       voters_count: question_data["votersCount"],
       choices: choices
     }
+  end
+
+  # an edit leaves where a poll sits in its thread as it was, so only a new poll takes its `reply_to_id` from `inReplyTo`
+  defp put_ap_reply_to(attrs, activity_data, question_data) do
+    {_reply_to_ap_object, thread_under_id} =
+      Bonfire.Social.Threads.ap_receive_reply_to(activity_data, question_data)
+
+    if thread_under_id, do: Map.put(attrs, :reply_to_id, thread_under_id), else: attrs
   end
 
   # Shared logic for boundary/circle/recipients extraction

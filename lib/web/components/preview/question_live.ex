@@ -57,6 +57,8 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
       # :peered, # not sure if needed?
       choices: [
         :post_content,
+        # the media an option places in its text, rendered there (see `ChoiceContentLive`): one more query for all the choices on the page, beside the others
+        :media,
         # Vote state is loaded through `Votes.preview_vote_state_for_*`, not
         # `object_voted`, so totals and viewer state stay explicitly scoped.
         created: [creator: [:profile, :character]]

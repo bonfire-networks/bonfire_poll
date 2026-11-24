@@ -19,6 +19,9 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   prop insert_text, :string, default: nil
   prop preloaded_recipients, :any, default: nil
   prop uploaded_files, :list, default: nil
+
+  # the composer's uploads, as for a post (attached to the poll, or placed in its text): kept under another name, since LiveView reserves `uploads` (see `update/2`)
+  data composer_uploads, :any, default: false
   prop title_prompt, :string, default: nil
   prop thread_mode, :any, default: nil
 
@@ -60,13 +63,13 @@ defmodule Bonfire.Poll.Web.CreatePollLive do
   # existing tuning_state so the other toggles survive.
   def update(assigns, socket) do
     {merge_tuning, assigns} = Map.pop(assigns, :merge_tuning)
+    # LiveView reserves `uploads` in a component, so the composer's are kept as `composer_uploads`
+    {uploads, assigns} = Map.pop(assigns, :uploads)
 
     socket =
       socket
-      |> assign(
-        Map.drop(assigns, [:uploads])
-        |> assigns_clean()
-      )
+      |> assign(assigns_clean(assigns))
+      |> then(&if(uploads, do: assign(&1, :composer_uploads, uploads), else: &1))
       |> maybe_merge_tuning(merge_tuning)
 
     {:ok, socket}

@@ -22,6 +22,7 @@ defmodule Bonfire.Poll.EditProposalLive do
           id={"poll_option_#{@index}"}
           name={"choices[#{@index}][name]"}
           type="text"
+          data-insert-at-cursor
           placeholder={l("Option %{n}", n: @index + 1)}
           class="block w-full rounded-md border border-divider bg-base-100 px-3 py-2.5 text-sm text-base-content placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40"
         />

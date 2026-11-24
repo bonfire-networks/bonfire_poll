@@ -145,12 +145,22 @@ defmodule Bonfire.Poll.Choices do
              current_user(opts),
              opts[:boundary] || "public",
              opts
-           ),
+           )
+           # the files its name shows (eg. an image placed in a poll option), attached to it as a post's are
+           |> maybe_attach_media(attrs[:uploaded_media]),
          {:ok, %{id: choice_id} = choice} <- repo().insert(cs),
          {:ok, _} <- put_choice(choice_id, question_id, index) do
       {:ok, choice}
     end
   end
+
+  defp maybe_attach_media(changeset, media) when is_list(media) and media != [] do
+    maybe_apply(Bonfire.Files.Acts.AttachMedia, :cast, [changeset, media],
+      fallback_return: changeset
+    )
+  end
+
+  defp maybe_attach_media(changeset, _), do: changeset
 
   def put_choice(choice, question, position \\ nil) do
     with %Ecto.Changeset{valid?: true} = cs <-

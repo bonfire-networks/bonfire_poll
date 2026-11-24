@@ -50,10 +50,20 @@ defmodule Bonfire.Poll.LiveHandler do
 
     attrs =
       params
-      |> Map.drop(preset_form_keys())
+      |> Map.drop(["upload_metadata" | preset_form_keys()])
       |> input_to_atoms(also_discard_unknown_nested_keys: false)
 
     current_user = current_user_required!(socket)
+
+    # the files uploaded in the composer, each one the question or an option places as `upload:<ref>` getting its stored URL there
+    {attrs, uploaded_media} =
+      live_upload_files_into(attrs, current_user, params["upload_metadata"], socket,
+        body_paths: [[:post_content, :html_body], [:choices, :each, :name]]
+      )
+
+    # a file an option shows is attached to that option's choice, else to the question (by the poll's epic, `AttachMedia`)
+    {attrs, question_media} = media_to_choices(attrs, uploaded_media)
+    attrs = Map.put(attrs, :uploaded_media, question_media)
 
     # Reuse the post composer's audience/verb-grants plumbing.
     {final_to_circles, verb_grants} =
@@ -194,6 +204,24 @@ defmodule Bonfire.Poll.LiveHandler do
     keys = Presets.tuning_keys()
     Enum.find(keys, List.first(keys), fn k -> Atom.to_string(k) == to_string(key) end)
   end
+
+  # Each option's attrs get the uploaded files its name shows (see `Bonfire.Files.InlineMedia.placed/2`), to attach to its choice; the others are the question's. Shown where they're attached, so the question's attachment list doesn't show an option's image again.
+  defp media_to_choices(%{choices: choices} = attrs, media)
+       when is_map(choices) and media != [] do
+    {choices, in_choices} =
+      Enum.map_reduce(choices, [], fn {key, choice}, in_choices ->
+        name = if is_map(choice), do: choice[:name] || choice["name"]
+
+        case maybe_apply(Bonfire.Files.InlineMedia, :placed, [media, name], fallback_return: []) do
+          [] -> {{key, choice}, in_choices}
+          shown -> {{key, Map.put(choice, :uploaded_media, shown)}, in_choices ++ shown}
+        end
+      end)
+
+    {Map.put(attrs, :choices, Map.new(choices)), media -- in_choices}
+  end
+
+  defp media_to_choices(attrs, media), do: {attrs, media}
 
   @doc """
   Map each rendered form shape to a `[%{choice_id, weight}]` list:
