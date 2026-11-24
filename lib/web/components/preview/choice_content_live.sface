@@ -3,20 +3,39 @@
   {#match name}
     {!-- option label: 15px regular (text-base), per the Figma poll artboards --}
     {!-- an image in the option stays small (at its own size at most, whole: see `HtmlBodyPartsLive`) --}
-    <div class="w-full h-auto max-w-full p-0 m-0 my-0 break-words text-base text-base-content [&_article[data-media]_img]:max-h-60">
-      <Bonfire.UI.Common.HtmlBodyPartsLive
-        html_body={name}
-        inline_media={maybe_apply(Bonfire.Files.InlineMedia, :url_map, [e(@object, :media, []), name],
-          fallback_return: %{}
-        )}
-        cw={@cw}
-        is_remote={@is_remote}
-        parent_id={id(@object)}
-        showing_within={@showing_within}
-        viewing_main_object={@viewing_main_object}
-        activity_inception={@activity_inception}
-      />
-    </div>
+    {#case split_media(@object, name)}
+      {#match %{inline_media: inline_media, parts: parts} = split}
+        <div class="w-full h-auto max-w-full p-0 m-0 my-0 break-words text-base text-base-content [&_article[data-media]_img]:max-h-60">
+          <Bonfire.UI.Common.HtmlBodyPartsLive
+            html_body={name}
+            inline_media={inline_media}
+            body_parts={parts}
+            cw={@cw}
+            is_remote={@is_remote}
+            parent_id={id(@object)}
+            showing_within={@showing_within}
+            viewing_main_object={@viewing_main_object}
+            activity_inception={@activity_inception}
+          />
+          {!-- the option's media its text doesn't place (eg. a link in a sentence), under it, as a post lists them --}
+          {#case split[:unplaced]}
+            {#match []}
+            {#match nil}
+            {#match unplaced}
+              <div data-role="choice_media" class="[&_article[data-media]_img]:max-h-60">
+                <StatelessComponent
+                  module={maybe_component(Bonfire.UI.Social.Activity.MediaLive, @__context__)}
+                  media={unplaced}
+                  cw={@cw}
+                  parent_id={deterministic_dom_id(__MODULE__, id(@object), "unplaced", nil)}
+                  showing_within={@showing_within}
+                  viewing_main_object={@viewing_main_object}
+                  activity_inception={@activity_inception}
+                />
+              </div>
+          {/case}
+        </div>
+    {/case}
 {/case}
 
 {#if !@compact}
