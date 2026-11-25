@@ -100,7 +100,8 @@
                         skip_markdown: @is_remote || @showing_within == :search,
                         __unsafe__: !@is_remote
                       ]}
-                      inline_media={maybe_apply(Bonfire.Files.InlineMedia, :url_map_for, [@activity, @object], fallback_return: %{})}
+                      inline_media={@inline_media ||
+                        maybe_apply(Bonfire.Files.InlineMedia, :url_map_for, [@activity, @object], fallback_return: %{})}
                       cw={@cw}
                       is_remote={@is_remote}
                       parent_id={@activity_component_id || id(@object)}

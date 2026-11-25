@@ -21,6 +21,10 @@ defmodule Bonfire.Poll.Web.Preview.QuestionLive do
   prop activity_inception, :boolean, default: false
   prop permalink, :string, default: nil
 
+  @doc "The media its question places, by URL, when the caller found them (`Bonfire.UI.Social.ActivityLive`, with `Bonfire.Files.InlineMedia.split/3`), so they aren't found again. Without them, it finds the media itself. The question's text is still cut here, with the options it's rendered with, which differ from a post's"
+  # `:any`, not `:map`: the caller passes nil when it found nothing, and a dynamic component checks prop types
+  prop inline_media, :any, default: nil
+
   # what `update_many/1` and the "See results" events keep for the poll shown: the viewer's own votes and, once loaded, the tallies
   data qstate, :any, default: nil
   data qstate_for, :any, default: nil

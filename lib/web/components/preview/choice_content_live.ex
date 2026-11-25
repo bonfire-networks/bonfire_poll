@@ -19,4 +19,14 @@ defmodule Bonfire.Poll.Web.Preview.ChoiceContentLive do
   def post_content(object) do
     e(object, :post_content, nil) || object
   end
+
+  @doc "The option's text cut where it places its media (`Bonfire.Files.InlineMedia.split/3`), once, with the options `Bonfire.UI.Common.HtmlBodyPartsLive` renders it with: `%{parts, inline_media, unplaced}`, the unplaced (eg. a link in a sentence) to show under it."
+  def split_media(object, name) do
+    maybe_apply(
+      Bonfire.Files.InlineMedia,
+      :split,
+      [e(object, :media, []), name, Bonfire.UI.Common.HtmlBodyPartsLive.parts_opts([])],
+      fallback_return: %{parts: nil, inline_media: %{}, unplaced: []}
+    )
+  end
 end

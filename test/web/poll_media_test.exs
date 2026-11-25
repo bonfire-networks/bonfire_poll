@@ -142,6 +142,42 @@ defmodule Bonfire.Poll.Web.PollMediaTest do
     refute question =~ Path.basename(media.path)
   end
 
+  # an option is split as a post's body is: a link in its sentence isn't placed there, so its card still shows, under the option
+  test "a link in the middle of an option's sentence keeps its card", %{conn: conn, me: me} do
+    url = "https://example.com/a-talk-#{System.unique_integer([:positive])}"
+
+    {:ok, link} =
+      Bonfire.Files.save_url_as_media(me, url, %{
+        media_type: "link",
+        metadata: %{"label" => "A Talk Worth Seeing"}
+      })
+
+    {:ok, question} =
+      Bonfire.Poll.Fake.fake_question_with_choices(
+        %{post_content: %{name: "Which one?"}},
+        [
+          %{name: "Watch #{url} before voting", html_body: "", uploaded_media: [link]},
+          %{name: "Neither", html_body: ""}
+        ],
+        current_user: me
+      )
+
+    assert [_] = Bonfire.Common.Repo.all(from(f in Bonfire.Files, where: f.media_id == ^id(link))),
+           "control: the link is attached to its option"
+
+    {:ok, view, _html} = live(conn, "/discussion/#{id(question)}")
+
+    option =
+      view
+      |> render()
+      |> LazyHTML.from_document()
+      |> LazyHTML.query("[data-id=activity_choice]")
+      |> LazyHTML.to_html()
+
+    assert option =~ "before voting"
+    assert option =~ "A Talk Worth Seeing"
+  end
+
   test "a poll published with an image it doesn't place has it attached, in its attachment list",
        %{
          conn: conn,
