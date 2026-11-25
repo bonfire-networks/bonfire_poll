@@ -16,7 +16,8 @@ defmodule Bonfire.Poll.Web.WidgetPollsClosingSoonLive do
   declare_widget(l("Polls closing soon"),
     id: :polls_closing_soon,
     current_user_required: true,
-    props: [limit: 3, widget_title: l("Polls closing soon")]
+    props: [limit: 3, widget_title: l("Polls closing soon")],
+    skeleton: :poll
   )
 
   alias Bonfire.Poll.Questions
