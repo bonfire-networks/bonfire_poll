@@ -40,27 +40,7 @@ defmodule Bonfire.Poll.LiveHandler do
     """)
   end
 
-  # Composer form is `as: :post` (mirroring the post composer), so unwrap once.
-  def handle_event("create_poll", %{"post" => post_params} = params, socket) do
-    handle_event("create_poll", Map.merge(params, post_params) |> Map.drop(["post"]), socket)
-  end
-
-  def handle_event("create_poll", params, socket) do
-    preset_params = preset_params_from_form(params)
-
-    attrs =
-      params
-      |> Map.drop(["upload_metadata" | preset_form_keys()])
-      |> input_to_atoms(also_discard_unknown_nested_keys: false)
-
-    current_user = current_user_required!(socket)
-
-    # the files uploaded in the composer, each one the question or an option places as `upload:<ref>` getting its stored URL there
-    {attrs, uploaded_media} =
-      live_upload_files_into(attrs, current_user, params["upload_metadata"], socket,
-        body_paths: [[:post_content, :html_body], [:choices, :each, :name]]
-      )
-
+  defp create_poll(params, attrs, uploaded_media, preset_params, current_user, socket) do
     # a file an option shows is attached to that option's choice, else to the question (by the poll's epic, `AttachMedia`)
     {attrs, question_media} = media_to_choices(attrs, uploaded_media)
     attrs = Map.put(attrs, :uploaded_media, question_media)
@@ -111,6 +91,37 @@ defmodule Bonfire.Poll.LiveHandler do
           |> Bonfire.UI.Common.SmartInput.LiveHandler.reset_input()
           |> assign_error(l("Could not create your poll"))
         }
+    end
+  end
+
+  # Composer form is `as: :post` (mirroring the post composer), so unwrap once.
+  def handle_event("create_poll", %{"post" => post_params} = params, socket) do
+    handle_event("create_poll", Map.merge(params, post_params) |> Map.drop(["post"]), socket)
+  end
+
+  def handle_event("create_poll", params, socket) do
+    preset_params = preset_params_from_form(params)
+
+    attrs =
+      params
+      |> Map.drop(["upload_metadata" | preset_form_keys()])
+      |> input_to_atoms(also_discard_unknown_nested_keys: false)
+
+    current_user = current_user_required!(socket)
+
+    # the files uploaded in the composer, each one the question or an option places as `upload:<ref>` getting its stored URL there
+    case live_upload_files_into(attrs, current_user, params["upload_metadata"], socket,
+           body_paths: [[:post_content, :html_body], [:choices, :each, :name]]
+         ) do
+      {:error, message} ->
+        # a file failed to upload: no poll is created, the text and the files stay
+        {:noreply,
+         socket
+         |> Bonfire.UI.Common.SmartInput.LiveHandler.refused()
+         |> assign_error(l("Could not create your poll") <> ": " <> message)}
+
+      {attrs, uploaded_media} ->
+        create_poll(params, attrs, uploaded_media, preset_params, current_user, socket)
     end
   end
 

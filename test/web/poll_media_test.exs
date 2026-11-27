@@ -272,4 +272,60 @@ defmodule Bonfire.Poll.Web.PollMediaTest do
     assert question =~ ~s(data-id="article_media")
     assert question =~ Path.basename(media.path)
   end
+
+  describe "a file that fails to upload" do
+    @gps_fixtures Path.expand("../../../bonfire_files/test/fixtures/gps", __DIR__)
+
+    defp submit_poll_with(persistent, fixture, type) do
+      name = Path.basename(fixture)
+
+      persistent
+      |> file_input(@poll_form, :files, [
+        %{name: name, content: File.read!(Path.join(@gps_fixtures, fixture)), type: type}
+      ])
+      |> render_upload(name)
+
+      persistent
+      |> element(@poll_form)
+      |> render_submit(%{
+        "post" => %{"post_content" => %{"html_body" => "Which one?"}},
+        "choices" => %{"0" => %{"name" => "Yes"}, "1" => %{"name" => "No"}},
+        "poll_preset" => "quick",
+        "poll_duration_hours" => "24"
+      })
+    end
+
+    defp polls_count, do: Bonfire.Common.Repo.aggregate(Bonfire.Poll.Question, :count)
+
+    test "a clean image is published with the poll (control)", %{conn: conn} do
+      persistent = open_poll_composer(conn)
+      before = polls_count()
+
+      submit_poll_with(persistent, "clean.jpg", "image/jpeg")
+
+      assert polls_count() == before + 1
+    end
+
+    test "a file that carries a location is refused: the error names it, no poll is created, the text and the file stay",
+         %{conn: conn} do
+      persistent = open_poll_composer(conn)
+      before = polls_count()
+
+      submit_poll_with(persistent, "gps.pdf", "application/pdf")
+
+      # the flash is shown by the persistent LiveView the composer lives in
+      flash =
+        persistent
+        |> render()
+        |> Floki.parse_document!()
+        |> Floki.find("[data-id=flash]")
+        |> Floki.text()
+
+      assert flash =~ "gps.pdf"
+      assert flash =~ "location data"
+      assert polls_count() == before
+      refute_push_event(persistent, "smart_input:reset", %{})
+      assert render(persistent) =~ "gps.pdf"
+    end
+  end
 end
